@@ -31,6 +31,7 @@ from openhands.events.event_store import EventStore
 from openhands.events.serialization.event import event_to_dict
 from openhands.integrations.provider import PROVIDER_TOKEN_TYPE, ProviderHandler
 from openhands.runtime.impl.remote.remote_runtime import RemoteRuntime
+from openhands.runtime.plugins.vscode import VSCodeRequirement
 from openhands.runtime.runtime_status import RuntimeStatus
 from openhands.server.config.server_config import ServerConfig
 from openhands.server.constants import ROOM_KEY
@@ -71,10 +72,12 @@ RUNTIME_CONVERSATION_URL = RUNTIME_URL_PATTERN + (
 )
 
 RUNTIME_USERNAME = os.getenv('RUNTIME_USERNAME')
-SU_TO_USER = os.getenv('SU_TO_USER')
-if SU_TO_USER is not None:
-    truthy = {'1', 'true', 't', 'yes', 'y', 'on'}
-    SU_TO_USER = str(SU_TO_USER.lower() in truthy).lower()
+
+SU_TO_USER = os.getenv('SU_TO_USER', 'false')
+truthy = {'1', 'true', 't', 'yes', 'y', 'on'}
+SU_TO_USER = str(SU_TO_USER.lower() in truthy).lower()
+
+DISABLE_VSCODE_PLUGIN = os.getenv('DISABLE_VSCODE_PLUGIN', 'false').lower() == 'true'
 
 # Time in seconds before a Redis entry is considered expired if not refreshed
 _REDIS_ENTRY_TIMEOUT_SECONDS = 300
@@ -815,11 +818,17 @@ class SaasNestedConversationManager(ConversationManager):
         if self._runtime_container_image:
             config.sandbox.runtime_container_image = self._runtime_container_image
 
+        plugins = [
+            plugin
+            for plugin in agent.sandbox_plugins
+            if not (DISABLE_VSCODE_PLUGIN and isinstance(plugin, VSCodeRequirement))
+        ]
+
         runtime = RemoteRuntime(
             config=config,
             event_stream=None,  # type: ignore[arg-type]
             sid=sid,
-            plugins=agent.sandbox_plugins,
+            plugins=plugins,
             # env_vars=env_vars,
             # status_callback: Callable[..., None] | None = None,
             attach_to_existing=False,
