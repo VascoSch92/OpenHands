@@ -801,7 +801,7 @@ class SaasNestedConversationManager(ConversationManager):
         env_vars['INIT_GIT_IN_EMPTY_WORKSPACE'] = '1'
         env_vars['ENABLE_V1'] = '0'
         env_vars['SU_TO_USER'] = SU_TO_USER
-        env_vars['DISABLE_VSCODE_PLUGIN'] = DISABLE_VSCODE_PLUGIN
+        env_vars['DISABLE_VSCODE_PLUGIN'] = str(DISABLE_VSCODE_PLUGIN).lower()
 
         # We need this for LLM traces tracking to identify the source of the LLM calls
         env_vars['WEB_HOST'] = WEB_HOST
