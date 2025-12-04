@@ -10,6 +10,13 @@ import SettingsScreen, { clientLoader } from "#/routes/settings";
 import { resetOrgMockData } from "#/mocks/org-handlers";
 import OptionService from "#/api/option-service/option-service.api";
 import BillingService from "#/api/billing-service/billing-service.api";
+import { useRolePermissions } from "#/hooks/use-role-permissions";
+import { OrganizationUserRole } from "#/types/org";
+
+// Mock the role permissions hook
+vi.mock("#/hooks/use-role-permissions", () => ({
+  useRolePermissions: vi.fn(),
+}));
 
 function ManageOrgWithPortalRoot() {
   return (
@@ -64,6 +71,16 @@ describe("Manage Org Route", () => {
     // @ts-expect-error - only return APP_MODE for these tests
     getConfigSpy.mockResolvedValue({
       APP_MODE: "saas",
+    });
+
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canAddCredits: true,
+      canInviteUsers: true,
+      canDeleteOrganization: true,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: false,
+      canChangeRoleToUser: false,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
     });
   });
 
@@ -161,7 +178,7 @@ describe("Manage Org Route", () => {
     expect(createCheckoutSessionSpy).not.toHaveBeenCalled();
   });
 
-  it("should NOT show add credits option for ADMIN role", async () => {
+  it("should show add credits option for ADMIN role", async () => {
     renderManageOrg();
     await screen.findByTestId("manage-org-screen");
 
@@ -173,9 +190,9 @@ describe("Manage Org Route", () => {
       expect(credits).toBeInTheDocument();
     });
 
-    // Verify add credits button is not present
-    const addButton = screen.queryByText(/add/i);
-    expect(addButton).not.toBeInTheDocument();
+    // Verify add credits button is present (admins can add credits)
+    const addButton = screen.getByText(/add/i);
+    expect(addButton).toBeInTheDocument();
   });
 
   describe("actions", () => {
@@ -244,6 +261,16 @@ describe("Manage Org Route", () => {
     });
 
     it("should NOT allow roles other than owners to delete an organization", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: true,
+        canInviteUsers: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
       const getConfigSpy = vi.spyOn(OptionService, "getConfig");
       // @ts-expect-error - only return the properties we need for this test
       getConfigSpy.mockResolvedValue({
@@ -295,5 +322,128 @@ describe("Manage Org Route", () => {
     });
 
     it.todo("should be able to update the organization billing info");
+  });
+
+  describe("Role-based delete organization permission behavior", () => {
+    it("should show delete organization button when user has canDeleteOrganization permission (Owner role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: true,
+        canInviteUsers: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrg();
+      await screen.findByTestId("manage-org-screen");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const deleteButton = await screen.findByRole("button", {
+        name: /ORG\$DELETE_ORGANIZATION/i,
+      });
+
+      expect(deleteButton).toBeInTheDocument();
+      expect(deleteButton).not.toBeDisabled();
+    });
+
+    it("should not show delete organization button when user lacks canDeleteOrganization permission (Admin role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: true,
+        canInviteUsers: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrg();
+      await screen.findByTestId("manage-org-screen");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const deleteButton = screen.queryByRole("button", {
+        name: /ORG\$DELETE_ORGANIZATION/i,
+      });
+
+      expect(deleteButton).not.toBeInTheDocument();
+    });
+
+    it("should not show delete organization button when user lacks canDeleteOrganization permission (User role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: false,
+        canInviteUsers: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrg();
+      await screen.findByTestId("manage-org-screen");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const deleteButton = screen.queryByRole("button", {
+        name: /ORG\$DELETE_ORGANIZATION/i,
+      });
+
+      expect(deleteButton).not.toBeInTheDocument();
+    });
+
+    it("should open delete confirmation modal when delete button is clicked (with permission)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: true,
+        canInviteUsers: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrg();
+      await screen.findByTestId("manage-org-screen");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      expect(
+        screen.queryByTestId("delete-org-confirmation"),
+      ).not.toBeInTheDocument();
+
+      const deleteButton = await screen.findByRole("button", {
+        name: /ORG\$DELETE_ORGANIZATION/i,
+      });
+      await userEvent.click(deleteButton);
+
+      expect(screen.getByTestId("delete-org-confirmation")).toBeInTheDocument();
+    });
+
+    it("should not render delete button when user lacks permission", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canAddCredits: true,
+        canInviteUsers: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrg();
+      await screen.findByTestId("manage-org-screen");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const deleteButton = screen.queryByRole("button", {
+        name: /ORG\$DELETE_ORGANIZATION/i,
+      });
+
+      expect(deleteButton).toBeNull();
+    });
   });
 });

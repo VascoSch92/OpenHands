@@ -10,6 +10,7 @@ interface OrganizationMemberListItemProps {
   role: OrganizationMember["role"];
   status: OrganizationMember["status"];
   hasPermissionToChangeRole: boolean;
+  availableRolesToChangeTo: OrganizationUserRole[];
 
   onRoleChange: (role: OrganizationUserRole) => void;
   onRemove?: () => void;
@@ -20,6 +21,7 @@ export function OrganizationMemberListItem({
   role,
   status,
   hasPermissionToChangeRole,
+  availableRolesToChangeTo,
   onRoleChange,
   onRemove,
 }: OrganizationMemberListItemProps) {
@@ -64,16 +66,27 @@ export function OrganizationMemberListItem({
 
       {roleSelectionIsPermitted && roleSelectionOpen && (
         <ul data-testid="role-dropdown">
-          <li>
-            <span onClick={() => handleRoleSelectionClick("admin")}>
-              {t(I18nKey.ORG$ROLE_ADMIN)}
-            </span>
-          </li>
-          <li>
-            <span onClick={() => handleRoleSelectionClick("user")}>
-              {t(I18nKey.ORG$ROLE_USER)}
-            </span>
-          </li>
+          {availableRolesToChangeTo.includes("owner") && (
+            <li>
+              <span onClick={() => handleRoleSelectionClick("owner")}>
+                {t(I18nKey.ORG$ROLE_OWNER)}
+              </span>
+            </li>
+          )}
+          {availableRolesToChangeTo.includes("admin") && (
+            <li>
+              <span onClick={() => handleRoleSelectionClick("admin")}>
+                {t(I18nKey.ORG$ROLE_ADMIN)}
+              </span>
+            </li>
+          )}
+          {availableRolesToChangeTo.includes("user") && (
+            <li>
+              <span onClick={() => handleRoleSelectionClick("user")}>
+                {t(I18nKey.ORG$ROLE_USER)}
+              </span>
+            </li>
+          )}
           <li>
             <span
               className="text-red-500 cursor-pointer"

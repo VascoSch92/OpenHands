@@ -12,6 +12,7 @@ import { useRemoveMember } from "#/hooks/mutation/use-remove-member";
 import { useMe } from "#/hooks/query/use-me";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { rolePermissions } from "#/utils/org/permissions";
+import { useRolePermissions } from "#/hooks/use-role-permissions";
 import { organizationService } from "#/api/organization-service/organization-service.api";
 import { queryClient } from "#/query-client-config";
 import {
@@ -41,15 +42,11 @@ function ManageOrganizationMembers() {
   const { t } = useTranslation();
   const { data: organizationMembers } = useOrganizationMembers();
   const { data: user } = useMe();
+  const { canInviteUsers, getAvailableRolesToChangeTo } = useRolePermissions();
   const { mutate: updateMemberRole } = useUpdateMemberRole();
   const { mutate: removeMember } = useRemoveMember();
 
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
-
-  const currentUserRole = user?.role || "user";
-  const hasPermissionToInvite = rolePermissions[currentUserRole].includes(
-    "invite_user_to_organization",
-  );
 
   const handleRoleSelectionClick = (id: string, role: OrganizationUserRole) => {
     updateMemberRole({ userId: id, role });
@@ -68,16 +65,24 @@ function ManageOrganizationMembers() {
     // Users cannot change their own role
     if (memberId === user.id) return false;
 
+    // Owners cannot change another owner's role
+    if (user.role === "owner" && memberRole === "owner") return false;
+
+    // Admins cannot change another admin's role
+    if (user.role === "admin" && memberRole === "admin") return false;
+
     const userPermissions = rolePermissions[user.role];
     return userPermissions.includes(`change_user_role:${memberRole}`);
   };
+
+  const availableRolesToChangeTo = getAvailableRolesToChangeTo();
 
   return (
     <div
       data-testid="manage-organization-members-settings"
       className="px-11 py-6 flex flex-col gap-2"
     >
-      {hasPermissionToInvite && (
+      {canInviteUsers && (
         <BrandButton
           type="button"
           variant="secondary"
@@ -113,6 +118,7 @@ function ManageOrganizationMembers() {
                   member.id,
                   member.role,
                 )}
+                availableRolesToChangeTo={availableRolesToChangeTo}
                 onRoleChange={(role) =>
                   handleRoleSelectionClick(member.id, role)
                 }

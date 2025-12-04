@@ -9,8 +9,19 @@ import ManageOrganizationMembers from "#/routes/manage-organization-members";
 import SettingsScreen, {
   clientLoader as settingsClientLoader,
 } from "#/routes/settings";
-import { ORGS_AND_MEMBERS } from "#/mocks/org-handlers";
+import {
+  ORGS_AND_MEMBERS,
+  resetOrgMockData,
+  resetOrgsAndMembersMockData,
+} from "#/mocks/org-handlers";
 import OptionService from "#/api/option-service/option-service.api";
+import { useRolePermissions } from "#/hooks/use-role-permissions";
+import { OrganizationUserRole } from "#/types/org";
+
+// Mock the role permissions hook
+vi.mock("#/hooks/use-role-permissions", () => ({
+  useRolePermissions: vi.fn(),
+}));
 
 function ManageOrganizationMembersWithPortalRoot() {
   return (
@@ -43,7 +54,7 @@ const RouteStub = createRoutesStub([
 
 let queryClient: QueryClient;
 
-describe("Manage Team Route", () => {
+describe("Manage Organization Members Route", () => {
   beforeEach(() => {
     const getConfigSpy = vi.spyOn(OptionService, "getConfig");
     // @ts-expect-error - only return APP_MODE for these tests
@@ -52,10 +63,26 @@ describe("Manage Team Route", () => {
     });
 
     queryClient = new QueryClient();
+
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canInviteUsers: true,
+      canAddCredits: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: false,
+      canChangeRoleToUser: false,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // Reset organization mock data to ensure clean state between tests
+    resetOrgMockData();
+    // Reset ORGS_AND_MEMBERS to initial state
+    resetOrgsAndMembersMockData();
+    // Clear queryClient cache to ensure fresh data for next test
+    queryClient.clear();
   });
 
   const renderManageOrganizationMembers = () =>
@@ -119,6 +146,19 @@ describe("Manage Team Route", () => {
   });
 
   test("an admin should be able to change the role of a organization member", async () => {
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canInviteUsers: true,
+      canAddCredits: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: true,
+      canChangeRoleToUser: true,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+        "admin",
+        "user",
+      ]),
+    });
+
     const updateMemberRoleSpy = vi.spyOn(
       organizationService,
       "updateMemberRole",
@@ -174,6 +214,16 @@ describe("Manage Team Route", () => {
   });
 
   it("should not allow a user to invite a new organization member", async () => {
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canInviteUsers: false,
+      canAddCredits: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: false,
+      canChangeRoleToUser: false,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    });
+
     renderManageOrganizationMembers();
     await screen.findByTestId("manage-organization-members-settings");
 
@@ -184,6 +234,19 @@ describe("Manage Team Route", () => {
   });
 
   it("should not allow an admin to change the owner's role", async () => {
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canInviteUsers: true,
+      canAddCredits: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: true,
+      canChangeRoleToUser: true,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+        "admin",
+        "user",
+      ]),
+    });
+
     renderManageOrganizationMembers();
     await screen.findByTestId("manage-organization-members-settings");
 
@@ -202,6 +265,19 @@ describe("Manage Team Route", () => {
   });
 
   it("should not allow an admin to change another admin's role", async () => {
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canInviteUsers: true,
+      canAddCredits: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: true,
+      canChangeRoleToUser: true,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+        "admin",
+        "user",
+      ]),
+    });
+
     renderManageOrganizationMembers();
     await screen.findByTestId("manage-organization-members-settings");
 
@@ -296,7 +372,7 @@ describe("Manage Team Route", () => {
     "should not allow a user to change another user's role if they are the same role",
   );
 
-  describe("Inviting Team Members", () => {
+  describe("Inviting Organization Members", () => {
     it("should render an invite organization member button", async () => {
       renderManageOrganizationMembers();
       await selectOrganization({ orgIndex: 0 });
@@ -374,6 +450,630 @@ describe("Manage Team Route", () => {
       expect(
         within(invitedMember).queryByTestId("role-dropdown"),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe("Role-based invite permission behavior", () => {
+    it("should show invite button when user has canInviteUsers permission (Owner role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const inviteButton = await screen.findByRole("button", {
+        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+      });
+
+      expect(inviteButton).toBeInTheDocument();
+      expect(inviteButton).not.toBeDisabled();
+    });
+
+    it("should show invite button when user has canInviteUsers permission (Admin role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const inviteButton = await screen.findByRole("button", {
+        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+      });
+
+      expect(inviteButton).toBeInTheDocument();
+      expect(inviteButton).not.toBeDisabled();
+    });
+
+    it("should not show invite button when user lacks canInviteUsers permission (User role)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: false,
+        canAddCredits: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const inviteButton = screen.queryByRole("button", {
+        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+      });
+
+      expect(inviteButton).not.toBeInTheDocument();
+    });
+
+    it("should open invite modal when invite button is clicked (with permission)", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      expect(screen.queryByTestId("invite-modal")).not.toBeInTheDocument();
+
+      const inviteButton = await screen.findByRole("button", {
+        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+      });
+      await userEvent.click(inviteButton);
+
+      const portalRoot = screen.getByTestId("portal-root");
+      expect(
+        within(portalRoot).getByTestId("invite-modal"),
+      ).toBeInTheDocument();
+    });
+
+    it("should not render invite button when user lacks permission", async () => {
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: false,
+        canAddCredits: false,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: false,
+        canChangeRoleToUser: false,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const inviteButton = screen.queryByRole("button", {
+        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+      });
+
+      expect(inviteButton).toBeNull();
+    });
+  });
+
+  describe("Role-based role change permission behavior", () => {
+    it("should not allow an owner to change another owner's role", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      const ownerMember = memberListItems[0]; // First member is owner
+      const roleText = within(ownerMember).getByText(/owner/i);
+      await userEvent.click(roleText);
+
+      // Verify that the dropdown does not open for another owner
+      expect(
+        within(ownerMember).queryByTestId("role-dropdown"),
+      ).not.toBeInTheDocument();
+    });
+
+    it("Owner should see all three role options (owner, admin, user) in dropdown when changing admin's role", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      const adminMember = memberListItems[1]; // Second member is admin (bob@acme.org)
+
+      const roleText = within(adminMember).getByText(/admin/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(adminMember).getByTestId("role-dropdown");
+
+      // Verify all three role options are present
+      expect(within(dropdown).getByText(/owner/i)).toBeInTheDocument();
+      expect(within(dropdown).getByText(/admin/i)).toBeInTheDocument();
+      expect(within(dropdown).getByText(/user/i)).toBeInTheDocument();
+    });
+
+    it("Owner should see all three role options (owner, admin, user) in dropdown when changing user's role", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      // Find charlie@acme.org member by email
+      const userMember = memberListItems.find((item) =>
+        within(item).queryByText("charlie@acme.org"),
+      );
+      if (!userMember) {
+        throw new Error("Could not find charlie@acme.org member");
+      }
+
+      const roleText = within(userMember).getByText(/user/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(userMember).getByTestId("role-dropdown");
+
+      // Verify all three role options are present
+      expect(within(dropdown).getByText(/owner/i)).toBeInTheDocument();
+      expect(within(dropdown).getByText(/admin/i)).toBeInTheDocument();
+      expect(within(dropdown).getByText(/user/i)).toBeInTheDocument();
+    });
+
+    it("Admin should see only admin and user options (not owner) in dropdown when changing user's role", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "7", // Ray is admin in org 3
+        email: "ray@all-hands.dev",
+        role: "admin",
+        status: "active",
+      });
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 2 }); // org 3
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      const userMember = memberListItems[2]; // Third member is user (chuck@all-hands.dev)
+
+      const roleText = within(userMember).getByText(/user/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(userMember).getByTestId("role-dropdown");
+
+      // Verify only admin and user options are present
+      expect(within(dropdown).getByText(/admin/i)).toBeInTheDocument();
+      expect(within(dropdown).getByText(/user/i)).toBeInTheDocument();
+      // Verify owner option is NOT present
+      expect(within(dropdown).queryByText(/owner/i)).not.toBeInTheDocument();
+    });
+
+    it("Admin should not see owner option in role dropdown for any member", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "7", // Ray is admin in org 3
+        email: "ray@all-hands.dev",
+        role: "admin",
+        status: "active",
+      });
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 2 }); // org 3
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+
+      // Check user member dropdown
+      const userMember = memberListItems[2]; // user member
+      const userRoleText = within(userMember).getByText(/user/i);
+      await userEvent.click(userRoleText);
+      const userDropdown = within(userMember).getByTestId("role-dropdown");
+      expect(
+        within(userDropdown).queryByText(/owner/i),
+      ).not.toBeInTheDocument();
+      await userEvent.click(userRoleText); // Close dropdown
+
+      // Check another user member dropdown if exists
+      if (memberListItems.length > 3) {
+        const anotherUserMember = memberListItems[3]; // another user member
+        const anotherUserRoleText =
+          within(anotherUserMember).getByText(/user/i);
+        await userEvent.click(anotherUserRoleText);
+        const anotherUserDropdown =
+          within(anotherUserMember).getByTestId("role-dropdown");
+        expect(
+          within(anotherUserDropdown).queryByText(/owner/i),
+        ).not.toBeInTheDocument();
+      }
+    });
+
+    it("Owner should be able to change admin's role to owner", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      const updateMemberRoleSpy = vi.spyOn(
+        organizationService,
+        "updateMemberRole",
+      );
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      const adminMember = memberListItems[1]; // Second member is admin (bob@acme.org)
+
+      const roleText = within(adminMember).getByText(/admin/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(adminMember).getByTestId("role-dropdown");
+      const ownerOption = within(dropdown).getByText(/owner/i);
+      await userEvent.click(ownerOption);
+
+      expect(updateMemberRoleSpy).toHaveBeenCalledExactlyOnceWith({
+        userId: "2",
+        orgId: "1",
+        role: "owner",
+      });
+    });
+
+    it("Owner should be able to change user's role to owner", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      const updateMemberRoleSpy = vi.spyOn(
+        organizationService,
+        "updateMemberRole",
+      );
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      // Find charlie@acme.org member by email
+      const userMember = memberListItems.find((item) =>
+        within(item).queryByText("charlie@acme.org"),
+      );
+      if (!userMember) {
+        throw new Error("Could not find charlie@acme.org member");
+      }
+
+      const roleText = within(userMember).getByText(/user/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(userMember).getByTestId("role-dropdown");
+      const ownerOption = within(dropdown).getByText(/owner/i);
+      await userEvent.click(ownerOption);
+
+      expect(updateMemberRoleSpy).toHaveBeenCalledExactlyOnceWith({
+        userId: "3",
+        orgId: "1",
+        role: "owner",
+      });
+    });
+
+    it("Owner should be able to change admin's role to admin (no change)", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "1", // Alice is owner in org 1
+        email: "alice@acme.org",
+        role: "owner",
+        status: "active",
+      });
+
+      const updateMemberRoleSpy = vi.spyOn(
+        organizationService,
+        "updateMemberRole",
+      );
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: true,
+        canChangeRoleToOwner: true,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "owner",
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 0 });
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      // Find bob@acme.org member by email
+      const adminMember = memberListItems.find((item) =>
+        within(item).queryByText("bob@acme.org"),
+      );
+      if (!adminMember) {
+        throw new Error("Could not find bob@acme.org member");
+      }
+
+      // Owner can change admin's role even to the same role
+      const roleText = within(adminMember).getByText(/admin/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(adminMember).getByTestId("role-dropdown");
+      const adminOption = within(dropdown).getByText(/admin/i);
+      await userEvent.click(adminOption);
+
+      expect(updateMemberRoleSpy).toHaveBeenCalledExactlyOnceWith({
+        userId: "2",
+        orgId: "1",
+        role: "admin",
+      });
+    });
+
+    it("Admin should be able to change user's role to admin", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "7", // Ray is admin in org 3
+        email: "ray@all-hands.dev",
+        role: "admin",
+        status: "active",
+      });
+
+      const updateMemberRoleSpy = vi.spyOn(
+        organizationService,
+        "updateMemberRole",
+      );
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 2 }); // org 3
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      // Find stephan@all-hands.dev member by email (index 3)
+      const userMember = memberListItems.find((item) =>
+        within(item).queryByText("stephan@all-hands.dev"),
+      );
+      if (!userMember) {
+        throw new Error("Could not find stephan@all-hands.dev member");
+      }
+
+      const roleText = within(userMember).getByText(/user/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(userMember).getByTestId("role-dropdown");
+      const adminOption = within(dropdown).getByText(/admin/i);
+      await userEvent.click(adminOption);
+
+      expect(updateMemberRoleSpy).toHaveBeenCalledExactlyOnceWith({
+        userId: "9",
+        orgId: "3",
+        role: "admin",
+      });
+    });
+
+    it("Admin should be able to change user's role to user (no change)", async () => {
+      const getMeSpy = vi.spyOn(organizationService, "getMe");
+      getMeSpy.mockResolvedValue({
+        id: "7", // Ray is admin in org 3
+        email: "ray@all-hands.dev",
+        role: "admin",
+        status: "active",
+      });
+
+      const updateMemberRoleSpy = vi.spyOn(
+        organizationService,
+        "updateMemberRole",
+      );
+
+      vi.mocked(useRolePermissions).mockReturnValue({
+        canInviteUsers: true,
+        canAddCredits: true,
+        canDeleteOrganization: false,
+        canChangeRoleToOwner: false,
+        canChangeRoleToAdmin: true,
+        canChangeRoleToUser: true,
+        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
+          "admin",
+          "user",
+        ]),
+      });
+
+      renderManageOrganizationMembers();
+      await screen.findByTestId("manage-organization-members-settings");
+
+      await selectOrganization({ orgIndex: 2 }); // org 3
+
+      const memberListItems = await screen.findAllByTestId("member-item");
+      // Find stephan@all-hands.dev member by email (index 3, but find by email to be safe)
+      const userMember = memberListItems.find((item) =>
+        within(item).queryByText("stephan@all-hands.dev"),
+      );
+      if (!userMember) {
+        throw new Error("Could not find stephan@all-hands.dev member");
+      }
+
+      const roleText = within(userMember).getByText(/user/i);
+      await userEvent.click(roleText);
+
+      const dropdown = within(userMember).getByTestId("role-dropdown");
+      const userOption = within(dropdown).getByText(/user/i);
+      await userEvent.click(userOption);
+
+      expect(updateMemberRoleSpy).toHaveBeenCalledExactlyOnceWith({
+        userId: "9", // stephan@all-hands.dev
+        orgId: "3",
+        role: "user",
+      });
     });
   });
 });

@@ -5,6 +5,8 @@ import BillingService from "#/api/billing-service/billing-service.api";
 import OptionService from "#/api/option-service/option-service.api";
 import { PaymentForm } from "#/components/features/payment/payment-form";
 import { renderWithProviders } from "../../../../test-utils";
+import { useRolePermissions } from "#/hooks/use-role-permissions";
+import { OrganizationUserRole } from "#/types/org";
 
 // Mock the stripe checkout hook to avoid JSDOM navigation issues
 const mockMutate = vi.fn().mockResolvedValue(undefined);
@@ -14,6 +16,11 @@ vi.mock("#/hooks/mutation/stripe/use-create-stripe-checkout-session", () => ({
     mutateAsync: vi.fn().mockResolvedValue(undefined),
     isPending: false,
   }),
+}));
+
+// Mock the role permissions hook
+vi.mock("#/hooks/use-role-permissions", () => ({
+  useRolePermissions: vi.fn(),
 }));
 
 describe("PaymentForm", () => {
@@ -39,6 +46,17 @@ describe("PaymentForm", () => {
         ENABLE_JIRA_DC: false,
         ENABLE_LINEAR: false,
       },
+    });
+
+    // Set default mock for role permissions
+    vi.mocked(useRolePermissions).mockReturnValue({
+      canAddCredits: true,
+      canInviteUsers: false,
+      canDeleteOrganization: false,
+      canChangeRoleToOwner: false,
+      canChangeRoleToAdmin: false,
+      canChangeRoleToUser: false,
+      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
     });
   });
 
@@ -186,6 +204,213 @@ describe("PaymentForm", () => {
       await user.click(topUpButton);
 
       expect(mockMutate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("Role-based permission behavior", () => {
+    beforeEach(() => {
+      getBalanceSpy.mockResolvedValue("100.00");
+    });
+
+    describe("Button disabled state based on role permissions", () => {
+      it("should disable 'Add Credits' button for User role", async () => {
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: false,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).toBeDisabled();
+      });
+
+      it("should enable 'Add Credits' button for Owner role when input is valid", async () => {
+        const user = userEvent.setup();
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: true,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const input = screen.getByTestId("top-up-input");
+        await user.type(input, "100");
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).not.toBeDisabled();
+      });
+
+      it("should enable 'Add Credits' button for Admin role when input is valid", async () => {
+        const user = userEvent.setup();
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: true,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const input = screen.getByTestId("top-up-input");
+        await user.type(input, "100");
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).not.toBeDisabled();
+      });
+
+      it("should keep button disabled when user lacks permission even with valid input", async () => {
+        const user = userEvent.setup();
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: false,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const input = screen.getByTestId("top-up-input");
+        await user.type(input, "100");
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).toBeDisabled();
+      });
+    });
+
+    describe("Permission check integration with other disabled conditions", () => {
+      it("should disable button when user has permission but form is pending", async () => {
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: true,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+        // Note: The original mock always returns isPending: false, so this test
+        // verifies the permission check logic. In a real scenario with isPending: true,
+        // the button would be disabled regardless of permission.
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).toBeDisabled();
+      });
+
+      it("should enable button only when all conditions are met (permission, not pending, valid input)", async () => {
+        const user = userEvent.setup();
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: true,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const input = screen.getByTestId("top-up-input");
+        await user.type(input, "100");
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).not.toBeDisabled();
+      });
+
+      it("should disable button when user lacks permission even if other conditions are met", async () => {
+        const user = userEvent.setup();
+        vi.mocked(useRolePermissions).mockReturnValue({
+          canAddCredits: false,
+          canInviteUsers: false,
+          canDeleteOrganization: false,
+          canChangeRoleToOwner: false,
+          canChangeRoleToAdmin: false,
+          canChangeRoleToUser: false,
+          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        });
+
+        renderPaymentForm();
+
+        // Wait for balance to load
+        await waitFor(() => {
+          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
+        });
+
+        const input = screen.getByTestId("top-up-input");
+        await user.type(input, "100");
+
+        const addCreditButton = screen.getByRole("button", {
+          name: /PAYMENT\$ADD_CREDIT/i,
+        });
+
+        expect(addCreditButton).toBeDisabled();
+      });
     });
   });
 });

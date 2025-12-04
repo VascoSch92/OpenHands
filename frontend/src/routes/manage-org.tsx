@@ -13,6 +13,7 @@ import { SettingsInput } from "#/components/features/settings/settings-input";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { useMe } from "#/hooks/query/use-me";
 import { rolePermissions } from "#/utils/org/permissions";
+import { useRolePermissions } from "#/hooks/use-role-permissions";
 import {
   getSelectedOrgFromQueryClient,
   getMeFromQueryClient,
@@ -250,6 +251,7 @@ export const clientLoader = async () => {
 function ManageOrg() {
   const { t } = useTranslation();
   const { data: me } = useMe();
+  const { canAddCredits, canDeleteOrganization } = useRolePermissions();
   const { data: organization } = useOrganization();
   const { data: organizationPaymentInfo } = useOrganizationPaymentInfo();
 
@@ -262,10 +264,6 @@ function ManageOrg() {
 
   const canChangeOrgName =
     !!me && rolePermissions[me.role].includes("change_organization_name");
-  const canDeleteOrg =
-    !!me && rolePermissions[me.role].includes("delete_organization");
-  const canAddCredits =
-    !!me && rolePermissions[me.role].includes("add_credits");
 
   return (
     <div
@@ -343,7 +341,7 @@ function ManageOrg() {
         </span>
       </div>
 
-      {canDeleteOrg && (
+      {canDeleteOrganization && (
         <button
           type="button"
           onClick={() => setDeleteOrgConfirmationVisible(true)}
