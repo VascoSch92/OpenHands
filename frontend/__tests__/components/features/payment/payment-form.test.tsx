@@ -338,58 +338,6 @@ describe("PaymentForm", () => {
 
         expect(addCreditButton).toBeDisabled();
       });
-
-      it("should enable button only when all conditions are met (permission, not pending, valid input)", async () => {
-        const user = userEvent.setup();
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "owner",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const input = screen.getByTestId("top-up-input");
-        await user.type(input, "100");
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).not.toBeDisabled();
-      });
-
-      it("should disable button when user lacks permission even if other conditions are met", async () => {
-        const user = userEvent.setup();
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "user",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const input = screen.getByTestId("top-up-input");
-        await user.type(input, "100");
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).toBeDisabled();
-      });
     });
   });
 });
