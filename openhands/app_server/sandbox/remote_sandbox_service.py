@@ -240,9 +240,7 @@ class RemoteSandboxService(SandboxService):
 
         # If a public facing url is defined, add a callback to the agent server environment.
         if self.web_url:
-            environment[WEBHOOK_CALLBACK_VARIABLE] = (
-                f'{self.web_url}/api/v1/webhooks/{sandbox_id}'
-            )
+            environment[WEBHOOK_CALLBACK_VARIABLE] = f'{self.web_url}/api/v1/webhooks'
             # We specify CORS settings only if there is a public facing url - otherwise
             # we are probably in local development and the only url in use is localhost
             environment[ALLOW_CORS_ORIGINS_VARIABLE] = self.web_url
