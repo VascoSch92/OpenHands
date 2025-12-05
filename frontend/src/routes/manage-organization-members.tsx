@@ -41,13 +41,15 @@ function ManageOrganizationMembers() {
   const { t } = useTranslation();
   const { data: organizationMembers } = useOrganizationMembers();
   const { data: user } = useMe();
-  const canInviteUsers =
-    !!user &&
-    rolePermissions[user.role].includes("invite_user_to_organization");
   const { mutate: updateMemberRole } = useUpdateMemberRole();
   const { mutate: removeMember } = useRemoveMember();
 
   const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
+
+  const currentUserRole = user?.role || "user";
+  const hasPermissionToInvite = rolePermissions[currentUserRole].includes(
+    "invite_user_to_organization",
+  );
 
   const handleRoleSelectionClick = (id: string, role: OrganizationUserRole) => {
     updateMemberRole({ userId: id, role });
@@ -101,7 +103,7 @@ function ManageOrganizationMembers() {
       data-testid="manage-organization-members-settings"
       className="px-11 py-6 flex flex-col gap-2"
     >
-      {canInviteUsers && (
+      {hasPermissionToInvite && (
         <BrandButton
           type="button"
           variant="secondary"

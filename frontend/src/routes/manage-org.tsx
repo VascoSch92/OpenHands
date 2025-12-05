@@ -250,10 +250,6 @@ export const clientLoader = async () => {
 function ManageOrg() {
   const { t } = useTranslation();
   const { data: me } = useMe();
-  const canAddCredits =
-    !!me && rolePermissions[me.role].includes("add_credits");
-  const canDeleteOrganization =
-    !!me && rolePermissions[me.role].includes("delete_organization");
   const { data: organization } = useOrganization();
   const { data: organizationPaymentInfo } = useOrganizationPaymentInfo();
 
@@ -266,6 +262,10 @@ function ManageOrg() {
 
   const canChangeOrgName =
     !!me && rolePermissions[me.role].includes("change_organization_name");
+  const canDeleteOrg =
+    !!me && rolePermissions[me.role].includes("delete_organization");
+  const canAddCredits =
+    !!me && rolePermissions[me.role].includes("add_credits");
 
   return (
     <div
@@ -343,7 +343,7 @@ function ManageOrg() {
         </span>
       </div>
 
-      {canDeleteOrganization && (
+      {canDeleteOrg && (
         <button
           type="button"
           onClick={() => setDeleteOrgConfirmationVisible(true)}
