@@ -642,6 +642,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         system_message_suffix: str | None,
         mcp_config: dict,
         condenser_max_size: int | None,
+        secrets: dict | None = None,
     ) -> Agent:
         """Create an agent with appropriate tools and context based on agent type.
 
@@ -651,6 +652,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             system_message_suffix: Optional suffix for system messages
             mcp_config: MCP configuration dictionary
             condenser_max_size: condenser_max_size setting
+            secrets: Optional dictionary of secrets for authentication
 
         Returns:
             Configured Agent instance with context
@@ -679,7 +681,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
 
         # Add agent context
-        agent_context = AgentContext(system_message_suffix=system_message_suffix)
+        agent_context = AgentContext(
+            system_message_suffix=system_message_suffix, secrets=secrets
+        )
         agent = agent.model_copy(update={'agent_context': agent_context})
 
         return agent
@@ -776,7 +780,12 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         # Create agent with context
         agent = self._create_agent_with_context(
-            llm, agent_type, system_message_suffix, mcp_config, user.condenser_max_size
+            llm,
+            agent_type,
+            system_message_suffix,
+            mcp_config,
+            user.condenser_max_size,
+            secrets=secrets,
         )
 
         # Finalize and return the conversation request
