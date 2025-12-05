@@ -3,10 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 import BillingService from "#/api/billing-service/billing-service.api";
 import OptionService from "#/api/option-service/option-service.api";
+import { organizationService } from "#/api/organization-service/organization-service.api";
 import { PaymentForm } from "#/components/features/payment/payment-form";
 import { renderWithProviders } from "../../../../test-utils";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
-import { OrganizationUserRole } from "#/types/org";
 
 // Mock the stripe checkout hook to avoid JSDOM navigation issues
 const mockMutate = vi.fn().mockResolvedValue(undefined);
@@ -18,9 +17,12 @@ vi.mock("#/hooks/mutation/stripe/use-create-stripe-checkout-session", () => ({
   }),
 }));
 
-// Mock the role permissions hook
-vi.mock("#/hooks/use-role-permissions", () => ({
-  useRolePermissions: vi.fn(),
+// Mock useSelectedOrganizationId to provide orgId so useMe query is enabled
+vi.mock("#/context/use-selected-organization", () => ({
+  useSelectedOrganizationId: vi.fn(() => ({
+    orgId: "1",
+    setOrgId: vi.fn(),
+  })),
 }));
 
 describe("PaymentForm", () => {
@@ -30,6 +32,7 @@ describe("PaymentForm", () => {
     "createCheckoutSession",
   );
   const getConfigSpy = vi.spyOn(OptionService, "getConfig");
+  const getMeSpy = vi.spyOn(organizationService, "getMe");
 
   const renderPaymentForm = () => renderWithProviders(<PaymentForm />);
 
@@ -48,15 +51,12 @@ describe("PaymentForm", () => {
       },
     });
 
-    // Set default mock for role permissions
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canAddCredits: true,
-      canInviteUsers: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: false,
-      canChangeRoleToUser: false,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    // Set default mock for user (owner role has add_credits permission)
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "owner",
+      status: "active",
     });
   });
 
@@ -214,14 +214,11 @@ describe("PaymentForm", () => {
 
     describe("Button disabled state based on role permissions", () => {
       it("should disable 'Add Credits' button for User role", async () => {
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: false,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "user",
+          status: "active",
         });
 
         renderPaymentForm();
@@ -240,14 +237,11 @@ describe("PaymentForm", () => {
 
       it("should enable 'Add Credits' button for Owner role when input is valid", async () => {
         const user = userEvent.setup();
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: true,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "owner",
+          status: "active",
         });
 
         renderPaymentForm();
@@ -269,14 +263,11 @@ describe("PaymentForm", () => {
 
       it("should enable 'Add Credits' button for Admin role when input is valid", async () => {
         const user = userEvent.setup();
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: true,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "admin",
+          status: "active",
         });
 
         renderPaymentForm();
@@ -298,14 +289,11 @@ describe("PaymentForm", () => {
 
       it("should keep button disabled when user lacks permission even with valid input", async () => {
         const user = userEvent.setup();
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: false,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "user",
+          status: "active",
         });
 
         renderPaymentForm();
@@ -328,14 +316,11 @@ describe("PaymentForm", () => {
 
     describe("Permission check integration with other disabled conditions", () => {
       it("should disable button when user has permission but form is pending", async () => {
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: true,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "owner",
+          status: "active",
         });
         // Note: The original mock always returns isPending: false, so this test
         // verifies the permission check logic. In a real scenario with isPending: true,
@@ -356,14 +341,11 @@ describe("PaymentForm", () => {
 
       it("should enable button only when all conditions are met (permission, not pending, valid input)", async () => {
         const user = userEvent.setup();
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: true,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "owner",
+          status: "active",
         });
 
         renderPaymentForm();
@@ -385,14 +367,11 @@ describe("PaymentForm", () => {
 
       it("should disable button when user lacks permission even if other conditions are met", async () => {
         const user = userEvent.setup();
-        vi.mocked(useRolePermissions).mockReturnValue({
-          canAddCredits: false,
-          canInviteUsers: false,
-          canDeleteOrganization: false,
-          canChangeRoleToOwner: false,
-          canChangeRoleToAdmin: false,
-          canChangeRoleToUser: false,
-          getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role: "user",
+          status: "active",
         });
 
         renderPaymentForm();

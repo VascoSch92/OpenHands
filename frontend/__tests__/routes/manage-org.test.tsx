@@ -10,13 +10,6 @@ import SettingsScreen, { clientLoader } from "#/routes/settings";
 import { resetOrgMockData } from "#/mocks/org-handlers";
 import OptionService from "#/api/option-service/option-service.api";
 import BillingService from "#/api/billing-service/billing-service.api";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
-import { OrganizationUserRole } from "#/types/org";
-
-// Mock the role permissions hook
-vi.mock("#/hooks/use-role-permissions", () => ({
-  useRolePermissions: vi.fn(),
-}));
 
 function ManageOrgWithPortalRoot() {
   return (
@@ -66,6 +59,8 @@ vi.mock("react-router", async () => ({
 }));
 
 describe("Manage Org Route", () => {
+  const getMeSpy = vi.spyOn(organizationService, "getMe");
+
   beforeEach(() => {
     const getConfigSpy = vi.spyOn(OptionService, "getConfig");
     // @ts-expect-error - only return APP_MODE for these tests
@@ -73,14 +68,12 @@ describe("Manage Org Route", () => {
       APP_MODE: "saas",
     });
 
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canAddCredits: true,
-      canInviteUsers: true,
-      canDeleteOrganization: true,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: false,
-      canChangeRoleToUser: false,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    // Set default mock for user (owner role has all permissions)
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "owner",
+      status: "active",
     });
   });
 
@@ -248,6 +241,14 @@ describe("Manage Org Route", () => {
     });
 
     it("should NOT allow roles other than owners to change org name", async () => {
+      // Set admin role before rendering
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "admin",
+        status: "active",
+      });
+
       renderManageOrg();
       await screen.findByTestId("manage-org-screen");
 
@@ -261,14 +262,11 @@ describe("Manage Org Route", () => {
     });
 
     it("should NOT allow roles other than owners to delete an organization", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: true,
-        canInviteUsers: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "admin",
+        status: "active",
       });
 
       const getConfigSpy = vi.spyOn(OptionService, "getConfig");
@@ -326,14 +324,11 @@ describe("Manage Org Route", () => {
 
   describe("Role-based delete organization permission behavior", () => {
     it("should show delete organization button when user has canDeleteOrganization permission (Owner role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: true,
-        canInviteUsers: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "owner",
+        status: "active",
       });
 
       renderManageOrg();
@@ -350,14 +345,11 @@ describe("Manage Org Route", () => {
     });
 
     it("should not show delete organization button when user lacks canDeleteOrganization permission (Admin role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: true,
-        canInviteUsers: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "admin",
+        status: "active",
       });
 
       renderManageOrg();
@@ -373,14 +365,11 @@ describe("Manage Org Route", () => {
     });
 
     it("should not show delete organization button when user lacks canDeleteOrganization permission (User role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: false,
-        canInviteUsers: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "user",
+        status: "active",
       });
 
       renderManageOrg();
@@ -396,14 +385,11 @@ describe("Manage Org Route", () => {
     });
 
     it("should open delete confirmation modal when delete button is clicked (with permission)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: true,
-        canInviteUsers: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "owner",
+        status: "active",
       });
 
       renderManageOrg();
@@ -424,14 +410,11 @@ describe("Manage Org Route", () => {
     });
 
     it("should not render delete button when user lacks permission", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canAddCredits: true,
-        canInviteUsers: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "admin",
+        status: "active",
       });
 
       renderManageOrg();

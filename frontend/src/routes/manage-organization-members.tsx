@@ -12,7 +12,6 @@ import { useRemoveMember } from "#/hooks/mutation/use-remove-member";
 import { useMe } from "#/hooks/query/use-me";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { rolePermissions } from "#/utils/org/permissions";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
 import { organizationService } from "#/api/organization-service/organization-service.api";
 import { queryClient } from "#/query-client-config";
 import {
@@ -42,7 +41,9 @@ function ManageOrganizationMembers() {
   const { t } = useTranslation();
   const { data: organizationMembers } = useOrganizationMembers();
   const { data: user } = useMe();
-  const { canInviteUsers, getAvailableRolesToChangeTo } = useRolePermissions();
+  const canInviteUsers =
+    !!user &&
+    rolePermissions[user.role].includes("invite_user_to_organization");
   const { mutate: updateMemberRole } = useUpdateMemberRole();
   const { mutate: removeMember } = useRemoveMember();
 
@@ -73,6 +74,24 @@ function ManageOrganizationMembers() {
 
     const userPermissions = rolePermissions[user.role];
     return userPermissions.includes(`change_user_role:${memberRole}`);
+  };
+
+  const getAvailableRolesToChangeTo = (): OrganizationUserRole[] => {
+    if (!user) return [];
+    const availableRoles: OrganizationUserRole[] = [];
+    const userPermissions = rolePermissions[user.role];
+
+    if (userPermissions.includes("change_user_role:owner")) {
+      availableRoles.push("owner");
+    }
+    if (userPermissions.includes("change_user_role:admin")) {
+      availableRoles.push("admin");
+    }
+    if (userPermissions.includes("change_user_role:user")) {
+      availableRoles.push("user");
+    }
+
+    return availableRoles;
   };
 
   const availableRolesToChangeTo = getAvailableRolesToChangeTo();

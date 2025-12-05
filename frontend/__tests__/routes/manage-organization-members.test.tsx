@@ -15,13 +15,6 @@ import {
   resetOrgsAndMembersMockData,
 } from "#/mocks/org-handlers";
 import OptionService from "#/api/option-service/option-service.api";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
-import { OrganizationUserRole } from "#/types/org";
-
-// Mock the role permissions hook
-vi.mock("#/hooks/use-role-permissions", () => ({
-  useRolePermissions: vi.fn(),
-}));
 
 function ManageOrganizationMembersWithPortalRoot() {
   return (
@@ -55,6 +48,8 @@ const RouteStub = createRoutesStub([
 let queryClient: QueryClient;
 
 describe("Manage Organization Members Route", () => {
+  const getMeSpy = vi.spyOn(organizationService, "getMe");
+
   beforeEach(() => {
     const getConfigSpy = vi.spyOn(OptionService, "getConfig");
     // @ts-expect-error - only return APP_MODE for these tests
@@ -64,14 +59,12 @@ describe("Manage Organization Members Route", () => {
 
     queryClient = new QueryClient();
 
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canInviteUsers: true,
-      canAddCredits: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: false,
-      canChangeRoleToUser: false,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    // Set default mock for user (admin role has invite permission)
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "admin",
+      status: "active",
     });
   });
 
@@ -146,17 +139,11 @@ describe("Manage Organization Members Route", () => {
   });
 
   test("an admin should be able to change the role of a organization member", async () => {
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canInviteUsers: true,
-      canAddCredits: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: true,
-      canChangeRoleToUser: true,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-        "admin",
-        "user",
-      ]),
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "admin",
+      status: "active",
     });
 
     const updateMemberRoleSpy = vi.spyOn(
@@ -214,14 +201,11 @@ describe("Manage Organization Members Route", () => {
   });
 
   it("should not allow a user to invite a new organization member", async () => {
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canInviteUsers: false,
-      canAddCredits: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: false,
-      canChangeRoleToUser: false,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "user",
+      status: "active",
     });
 
     renderManageOrganizationMembers();
@@ -234,17 +218,11 @@ describe("Manage Organization Members Route", () => {
   });
 
   it("should not allow an admin to change the owner's role", async () => {
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canInviteUsers: true,
-      canAddCredits: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: true,
-      canChangeRoleToUser: true,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-        "admin",
-        "user",
-      ]),
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "admin",
+      status: "active",
     });
 
     renderManageOrganizationMembers();
@@ -265,17 +243,11 @@ describe("Manage Organization Members Route", () => {
   });
 
   it("should not allow an admin to change another admin's role", async () => {
-    vi.mocked(useRolePermissions).mockReturnValue({
-      canInviteUsers: true,
-      canAddCredits: false,
-      canDeleteOrganization: false,
-      canChangeRoleToOwner: false,
-      canChangeRoleToAdmin: true,
-      canChangeRoleToUser: true,
-      getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-        "admin",
-        "user",
-      ]),
+    getMeSpy.mockResolvedValue({
+      id: "1",
+      email: "test@example.com",
+      role: "admin",
+      status: "active",
     });
 
     renderManageOrganizationMembers();
@@ -455,14 +427,11 @@ describe("Manage Organization Members Route", () => {
 
   describe("Role-based invite permission behavior", () => {
     it("should show invite button when user has canInviteUsers permission (Owner role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "owner",
+        status: "active",
       });
 
       renderManageOrganizationMembers();
@@ -479,14 +448,11 @@ describe("Manage Organization Members Route", () => {
     });
 
     it("should show invite button when user has canInviteUsers permission (Admin role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "admin",
+        status: "active",
       });
 
       renderManageOrganizationMembers();
@@ -503,37 +469,45 @@ describe("Manage Organization Members Route", () => {
     });
 
     it("should not show invite button when user lacks canInviteUsers permission (User role)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: false,
-        canAddCredits: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
-      });
+      const userData = {
+        id: "1",
+        email: "test@example.com",
+        role: "user" as const,
+        status: "active" as const,
+      };
+
+      // Set mock and remove cached query before rendering
+      getMeSpy.mockResolvedValue(userData);
+      // Remove any cached "me" queries so fresh data is fetched
+      queryClient.removeQueries({ queryKey: ["organizations"] });
 
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
 
       await selectOrganization({ orgIndex: 0 });
 
-      const inviteButton = screen.queryByRole("button", {
-        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
-      });
+      // Directly set the query data to force component re-render with user role
+      // This ensures the component uses the user role data instead of cached admin data
+      queryClient.setQueryData(["organizations", "1", "me"], userData);
 
-      expect(inviteButton).not.toBeInTheDocument();
+      // Wait for the component to update with the new query data
+      await waitFor(
+        () => {
+          const inviteButton = screen.queryByRole("button", {
+            name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+          });
+          expect(inviteButton).not.toBeInTheDocument();
+        },
+        { timeout: 3000 },
+      );
     });
 
     it("should open invite modal when invite button is clicked (with permission)", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
+      getMeSpy.mockResolvedValue({
+        id: "1",
+        email: "test@example.com",
+        role: "owner",
+        status: "active",
       });
 
       renderManageOrganizationMembers();
@@ -555,26 +529,37 @@ describe("Manage Organization Members Route", () => {
     });
 
     it("should not render invite button when user lacks permission", async () => {
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: false,
-        canAddCredits: false,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: false,
-        canChangeRoleToUser: false,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => []),
-      });
+      const userData = {
+        id: "1",
+        email: "test@example.com",
+        role: "user" as const,
+        status: "active" as const,
+      };
+
+      // Set mock and remove cached query before rendering
+      getMeSpy.mockResolvedValue(userData);
+      // Remove any cached "me" queries so fresh data is fetched
+      queryClient.removeQueries({ queryKey: ["organizations"] });
 
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
 
       await selectOrganization({ orgIndex: 0 });
 
-      const inviteButton = screen.queryByRole("button", {
-        name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
-      });
+      // Directly set the query data to force component re-render with user role
+      // This ensures the component uses the user role data instead of cached admin data
+      queryClient.setQueryData(["organizations", "1", "me"], userData);
 
-      expect(inviteButton).toBeNull();
+      // Wait for the component to update with the new query data
+      await waitFor(
+        () => {
+          const inviteButton = screen.queryByRole("button", {
+            name: /ORG\$INVITE_ORGANIZATION_MEMBER/i,
+          });
+          expect(inviteButton).toBeNull();
+        },
+        { timeout: 3000 },
+      );
     });
   });
 
@@ -586,20 +571,6 @@ describe("Manage Organization Members Route", () => {
         email: "alice@acme.org",
         role: "owner",
         status: "active",
-      });
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
       });
 
       renderManageOrganizationMembers();
@@ -625,20 +596,6 @@ describe("Manage Organization Members Route", () => {
         email: "alice@acme.org",
         role: "owner",
         status: "active",
-      });
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
       });
 
       renderManageOrganizationMembers();
@@ -667,20 +624,6 @@ describe("Manage Organization Members Route", () => {
         email: "alice@acme.org",
         role: "owner",
         status: "active",
-      });
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
       });
 
       renderManageOrganizationMembers();
@@ -717,19 +660,6 @@ describe("Manage Organization Members Route", () => {
         status: "active",
       });
 
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "admin",
-          "user",
-        ]),
-      });
-
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
 
@@ -757,19 +687,6 @@ describe("Manage Organization Members Route", () => {
         email: "ray@all-hands.dev",
         role: "admin",
         status: "active",
-      });
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "admin",
-          "user",
-        ]),
       });
 
       renderManageOrganizationMembers();
@@ -817,20 +734,6 @@ describe("Manage Organization Members Route", () => {
         "updateMemberRole",
       );
 
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
-      });
-
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
 
@@ -866,20 +769,6 @@ describe("Manage Organization Members Route", () => {
         organizationService,
         "updateMemberRole",
       );
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
-      });
 
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
@@ -922,20 +811,6 @@ describe("Manage Organization Members Route", () => {
         organizationService,
         "updateMemberRole",
       );
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: true,
-        canChangeRoleToOwner: true,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "owner",
-          "admin",
-          "user",
-        ]),
-      });
 
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
@@ -980,19 +855,6 @@ describe("Manage Organization Members Route", () => {
         "updateMemberRole",
       );
 
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "admin",
-          "user",
-        ]),
-      });
-
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");
 
@@ -1034,19 +896,6 @@ describe("Manage Organization Members Route", () => {
         organizationService,
         "updateMemberRole",
       );
-
-      vi.mocked(useRolePermissions).mockReturnValue({
-        canInviteUsers: true,
-        canAddCredits: true,
-        canDeleteOrganization: false,
-        canChangeRoleToOwner: false,
-        canChangeRoleToAdmin: true,
-        canChangeRoleToUser: true,
-        getAvailableRolesToChangeTo: vi.fn((): OrganizationUserRole[] => [
-          "admin",
-          "user",
-        ]),
-      });
 
       renderManageOrganizationMembers();
       await screen.findByTestId("manage-organization-members-settings");

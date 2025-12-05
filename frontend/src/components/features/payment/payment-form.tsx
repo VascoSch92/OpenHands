@@ -2,7 +2,8 @@ import React from "react";
 import { useTranslation } from "react-i18next";
 import { useCreateStripeCheckoutSession } from "#/hooks/mutation/stripe/use-create-stripe-checkout-session";
 import { useBalance } from "#/hooks/query/use-balance";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
+import { useMe } from "#/hooks/query/use-me";
+import { rolePermissions } from "#/utils/org/permissions";
 import { cn } from "#/utils/utils";
 import MoneyIcon from "#/icons/money.svg?react";
 import { SettingsInput } from "../settings/settings-input";
@@ -15,7 +16,9 @@ import { PoweredByStripeTag } from "./powered-by-stripe-tag";
 export function PaymentForm() {
   const { t } = useTranslation();
   const { data: balance, isLoading } = useBalance();
-  const { canAddCredits } = useRolePermissions();
+  const { data: me } = useMe();
+  const canAddCredits =
+    !!me && rolePermissions[me.role].includes("add_credits");
   const { mutate: addBalance, isPending } = useCreateStripeCheckoutSession();
 
   const [buttonIsDisabled, setButtonIsDisabled] = React.useState(true);

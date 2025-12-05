@@ -13,7 +13,6 @@ import { SettingsInput } from "#/components/features/settings/settings-input";
 import { BrandButton } from "#/components/features/settings/brand-button";
 import { useMe } from "#/hooks/query/use-me";
 import { rolePermissions } from "#/utils/org/permissions";
-import { useRolePermissions } from "#/hooks/use-role-permissions";
 import {
   getSelectedOrgFromQueryClient,
   getMeFromQueryClient,
@@ -251,7 +250,10 @@ export const clientLoader = async () => {
 function ManageOrg() {
   const { t } = useTranslation();
   const { data: me } = useMe();
-  const { canAddCredits, canDeleteOrganization } = useRolePermissions();
+  const canAddCredits =
+    !!me && rolePermissions[me.role].includes("add_credits");
+  const canDeleteOrganization =
+    !!me && rolePermissions[me.role].includes("delete_organization");
   const { data: organization } = useOrganization();
   const { data: organizationPaymentInfo } = useOrganizationPaymentInfo();
 
