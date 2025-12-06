@@ -345,45 +345,31 @@ describe("Manage Org Route", () => {
       expect(deleteButton).not.toBeDisabled();
     });
 
-    it("should not show delete organization button when user lacks canDeleteOrganization permission (Admin role)", async () => {
-      getMeSpy.mockResolvedValue({
-        id: "1",
-        email: "test@example.com",
-        role: "admin",
-        status: "active",
-      });
+    it.each([
+      { role: "admin" as const, roleName: "Admin" },
+      { role: "user" as const, roleName: "User" },
+    ])(
+      "should not show delete organization button when user lacks canDeleteOrganization permission ($roleName role)",
+      async ({ role }) => {
+        getMeSpy.mockResolvedValue({
+          id: "1",
+          email: "test@example.com",
+          role,
+          status: "active",
+        });
 
-      renderManageOrg();
-      await screen.findByTestId("manage-org-screen");
+        renderManageOrg();
+        await screen.findByTestId("manage-org-screen");
 
-      await selectOrganization({ orgIndex: 0 });
+        await selectOrganization({ orgIndex: 0 });
 
-      const deleteButton = screen.queryByRole("button", {
-        name: /ORG\$DELETE_ORGANIZATION/i,
-      });
+        const deleteButton = screen.queryByRole("button", {
+          name: /ORG\$DELETE_ORGANIZATION/i,
+        });
 
-      expect(deleteButton).not.toBeInTheDocument();
-    });
-
-    it("should not show delete organization button when user lacks canDeleteOrganization permission (User role)", async () => {
-      getMeSpy.mockResolvedValue({
-        id: "1",
-        email: "test@example.com",
-        role: "user",
-        status: "active",
-      });
-
-      renderManageOrg();
-      await screen.findByTestId("manage-org-screen");
-
-      await selectOrganization({ orgIndex: 0 });
-
-      const deleteButton = screen.queryByRole("button", {
-        name: /ORG\$DELETE_ORGANIZATION/i,
-      });
-
-      expect(deleteButton).not.toBeInTheDocument();
-    });
+        expect(deleteButton).not.toBeInTheDocument();
+      },
+    );
 
     it("should open delete confirmation modal when delete button is clicked (with permission)", async () => {
       getMeSpy.mockResolvedValue({
@@ -408,26 +394,6 @@ describe("Manage Org Route", () => {
       await userEvent.click(deleteButton);
 
       expect(screen.getByTestId("delete-org-confirmation")).toBeInTheDocument();
-    });
-
-    it("should not render delete button when user lacks permission", async () => {
-      getMeSpy.mockResolvedValue({
-        id: "1",
-        email: "test@example.com",
-        role: "admin",
-        status: "active",
-      });
-
-      renderManageOrg();
-      await screen.findByTestId("manage-org-screen");
-
-      await selectOrganization({ orgIndex: 0 });
-
-      const deleteButton = screen.queryByRole("button", {
-        name: /ORG\$DELETE_ORGANIZATION/i,
-      });
-
-      expect(deleteButton).toBeNull();
     });
   });
 });
