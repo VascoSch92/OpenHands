@@ -78,7 +78,7 @@ function ManageOrganizationMembers() {
     return userPermissions.includes(`change_user_role:${memberRole}`);
   };
 
-  const getAvailableRolesToChangeTo = (): OrganizationUserRole[] => {
+  const availableRolesToChangeTo = React.useMemo((): OrganizationUserRole[] => {
     if (!user) return [];
     const availableRoles: OrganizationUserRole[] = [];
     const userPermissions = rolePermissions[user.role];
@@ -94,9 +94,7 @@ function ManageOrganizationMembers() {
     }
 
     return availableRoles;
-  };
-
-  const availableRolesToChangeTo = getAvailableRolesToChangeTo();
+  }, [user]);
 
   return (
     <div
