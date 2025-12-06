@@ -61,24 +61,20 @@ function TempButton({
   onClick,
   type,
   variant = "primary",
-  disabled = false,
 }: React.PropsWithChildren<{
   onClick?: () => void;
   type: "button" | "submit";
   variant?: "primary" | "secondary";
-  disabled?: boolean;
 }>) {
   return (
     <button
       className={cn(
-        "flex-1 py-3 rounded text-sm text-center font-semibold",
+        "flex-1 py-3 rounded text-sm text-center font-semibold cursor-pointer",
         variant === "primary" && "bg-[#F3CE49] text-black",
         variant === "secondary" && "bg-[#737373] text-white",
-        disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer",
       )}
       type={type === "submit" ? "submit" : "button"}
       onClick={onClick}
-      disabled={disabled}
     >
       {children}
     </button>
@@ -194,7 +190,7 @@ interface AddCreditsModalProps {
 
 function AddCreditsModal({ onClose }: AddCreditsModalProps) {
   const { t } = useTranslation();
-  const { mutate: addBalance, isPending } = useCreateStripeCheckoutSession();
+  const { mutate: addBalance } = useCreateStripeCheckoutSession();
 
   const [inputValue, setInputValue] = React.useState("");
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
@@ -277,9 +273,7 @@ function AddCreditsModal({ onClose }: AddCreditsModalProps) {
         </div>
 
         <div className="flex gap-2">
-          <TempButton type="submit" disabled={isPending}>
-            {t(I18nKey.ORG$NEXT)}
-          </TempButton>
+          <TempButton type="submit">{t(I18nKey.ORG$NEXT)}</TempButton>
           <TempButton type="button" onClick={onClose} variant="secondary">
             {t(I18nKey.BUTTON$CANCEL)}
           </TempButton>

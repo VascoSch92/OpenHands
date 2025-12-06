@@ -222,24 +222,6 @@ describe("Manage Org Route", () => {
 
         expect(nextButton).not.toBeDisabled();
       });
-
-      it("should disable submit button during pending state", async () => {
-        const createCheckoutSessionSpy = vi
-          .spyOn(BillingService, "createCheckoutSession")
-          .mockImplementation(() => new Promise(() => {})); // Never resolves
-
-        const { user } = await openAddCreditsModal();
-        const amountInput = screen.getByTestId("amount-input");
-        const nextButton = screen.getByRole("button", { name: /next/i });
-
-        await user.type(amountInput, "100");
-        await user.click(nextButton);
-
-        // Button should be disabled after clicking (while pending)
-        await waitFor(() => {
-          expect(nextButton).toBeDisabled();
-        });
-      });
     });
 
     describe("Input Attributes & Placeholder", () => {
