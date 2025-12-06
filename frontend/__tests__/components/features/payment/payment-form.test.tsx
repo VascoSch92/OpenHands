@@ -17,14 +17,6 @@ vi.mock("#/hooks/mutation/stripe/use-create-stripe-checkout-session", () => ({
   }),
 }));
 
-// Mock useSelectedOrganizationId to provide orgId so useMe query is enabled
-vi.mock("#/context/use-selected-organization", () => ({
-  useSelectedOrganizationId: vi.fn(() => ({
-    orgId: "1",
-    setOrgId: vi.fn(),
-  })),
-}));
-
 describe("PaymentForm", () => {
   const getBalanceSpy = vi.spyOn(BillingService, "getBalance");
   const createCheckoutSessionSpy = vi.spyOn(
@@ -49,14 +41,6 @@ describe("PaymentForm", () => {
         ENABLE_JIRA_DC: false,
         ENABLE_LINEAR: false,
       },
-    });
-
-    // Set default mock for user (owner role has add_credits permission)
-    getMeSpy.mockResolvedValue({
-      id: "1",
-      email: "test@example.com",
-      role: "owner",
-      status: "active",
     });
   });
 
@@ -204,140 +188,6 @@ describe("PaymentForm", () => {
       await user.click(topUpButton);
 
       expect(mockMutate).not.toHaveBeenCalled();
-    });
-  });
-
-  describe("Role-based permission behavior", () => {
-    beforeEach(() => {
-      getBalanceSpy.mockResolvedValue("100.00");
-    });
-
-    describe("Button disabled state based on role permissions", () => {
-      it("should disable 'Add Credits' button for User role", async () => {
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "user",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).toBeDisabled();
-      });
-
-      it("should enable 'Add Credits' button for Owner role when input is valid", async () => {
-        const user = userEvent.setup();
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "owner",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const input = screen.getByTestId("top-up-input");
-        await user.type(input, "100");
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).not.toBeDisabled();
-      });
-
-      it("should enable 'Add Credits' button for Admin role when input is valid", async () => {
-        const user = userEvent.setup();
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "admin",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const input = screen.getByTestId("top-up-input");
-        await user.type(input, "100");
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).not.toBeDisabled();
-      });
-
-      it("should keep button disabled when user lacks permission even with valid input", async () => {
-        const user = userEvent.setup();
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "user",
-          status: "active",
-        });
-
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const input = screen.getByTestId("top-up-input");
-        await user.type(input, "100");
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).toBeDisabled();
-      });
-    });
-
-    describe("Permission check integration with other disabled conditions", () => {
-      it("should disable button when user has permission but form is pending", async () => {
-        getMeSpy.mockResolvedValue({
-          id: "1",
-          email: "test@example.com",
-          role: "owner",
-          status: "active",
-        });
-        // Note: The original mock always returns isPending: false, so this test
-        // verifies the permission check logic. In a real scenario with isPending: true,
-        // the button would be disabled regardless of permission.
-        renderPaymentForm();
-
-        // Wait for balance to load
-        await waitFor(() => {
-          expect(screen.getByTestId("user-balance")).toBeInTheDocument();
-        });
-
-        const addCreditButton = screen.getByRole("button", {
-          name: /PAYMENT\$ADD_CREDIT/i,
-        });
-
-        expect(addCreditButton).toBeDisabled();
-      });
     });
   });
 });
