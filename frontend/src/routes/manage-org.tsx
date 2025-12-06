@@ -197,7 +197,6 @@ function AddCreditsModal({ onClose }: AddCreditsModalProps) {
   const { mutate: addBalance, isPending } = useCreateStripeCheckoutSession();
 
   const [inputValue, setInputValue] = React.useState("");
-  const [buttonIsDisabled, setButtonIsDisabled] = React.useState(true);
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null);
 
   const getErrorMessage = (value: string): string | null => {
@@ -236,19 +235,14 @@ function AddCreditsModal({ onClose }: AddCreditsModalProps) {
 
       addBalance({ amount: intValue }, { onSuccess: onClose });
 
-      setButtonIsDisabled(true);
       setErrorMessage(null);
     }
   };
 
   const handleAmountInputChange = (value: string) => {
     setInputValue(value);
-
-    const isValid = amountIsValid(value);
-    setButtonIsDisabled(!isValid);
-
-    const error = getErrorMessage(value);
-    setErrorMessage(error);
+    // Clear error message when user starts typing again
+    setErrorMessage(null);
   };
 
   return (
@@ -256,6 +250,7 @@ function AddCreditsModal({ onClose }: AddCreditsModalProps) {
       <form
         data-testid="add-credits-form"
         action={formAction}
+        noValidate
         className="w-md rounded-xl bg-[#171717] flex flex-col p-6 gap-6"
       >
         <div className="flex flex-col gap-2">
@@ -282,7 +277,7 @@ function AddCreditsModal({ onClose }: AddCreditsModalProps) {
         </div>
 
         <div className="flex gap-2">
-          <TempButton type="submit" disabled={buttonIsDisabled || isPending}>
+          <TempButton type="submit" disabled={isPending}>
             {t(I18nKey.ORG$NEXT)}
           </TempButton>
           <TempButton type="button" onClick={onClose} variant="secondary">
