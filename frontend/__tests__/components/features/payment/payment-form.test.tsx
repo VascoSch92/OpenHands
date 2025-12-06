@@ -3,7 +3,6 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
 import BillingService from "#/api/billing-service/billing-service.api";
 import OptionService from "#/api/option-service/option-service.api";
-import { organizationService } from "#/api/organization-service/organization-service.api";
 import { PaymentForm } from "#/components/features/payment/payment-form";
 import { renderWithProviders } from "../../../../test-utils";
 
@@ -24,7 +23,6 @@ describe("PaymentForm", () => {
     "createCheckoutSession",
   );
   const getConfigSpy = vi.spyOn(OptionService, "getConfig");
-  const getMeSpy = vi.spyOn(organizationService, "getMe");
 
   const renderPaymentForm = () => renderWithProviders(<PaymentForm />);
 
