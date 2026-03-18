@@ -2,20 +2,7 @@ import React from "react";
 import { ExtraProps } from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
-import CopyIcon from "#/icons/copy.svg?react";
-
-function CopyButton({ text }: { text: string }) {
-  return (
-    <button
-      type="button"
-      onClick={() => navigator.clipboard.writeText(text)}
-      className="absolute top-2 right-2 p-1 rounded bg-neutral-700 hover:bg-neutral-600"
-      aria-label="Copy code"
-    >
-      <CopyIcon width={14} height={14} />
-    </button>
-  );
-}
+import { CopyableContentWrapper } from "#/components/shared/buttons/copyable-content-wrapper";
 
 // See https://github.com/remarkjs/react-markdown?tab=readme-ov-file#use-custom-components-syntax-highlight
 
@@ -52,8 +39,7 @@ export function code({
     }
 
     return (
-      <div className="relative">
-        <CopyButton text={codeString} />
+      <CopyableContentWrapper text={codeString}>
         <pre
           style={{
             backgroundColor: "#2a3038",
@@ -66,13 +52,12 @@ export function code({
         >
           <code className={className}>{codeString}</code>
         </pre>
-      </div>
+      </CopyableContentWrapper>
     );
   }
 
   return (
-    <div className="relative">
-      <CopyButton text={codeString} />
+    <CopyableContentWrapper text={codeString}>
       <SyntaxHighlighter
         className="rounded-lg"
         style={vscDarkPlus}
@@ -81,6 +66,6 @@ export function code({
       >
         {codeString}
       </SyntaxHighlighter>
-    </div>
+    </CopyableContentWrapper>
   );
 }
