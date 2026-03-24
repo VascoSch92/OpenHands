@@ -77,6 +77,21 @@ describe("SkillReadyContentList", () => {
     expect(screen.queryByText("GitLab guide")).not.toBeInTheDocument();
   });
 
+  it("renders <important> content as bold text", async () => {
+    const user = userEvent.setup();
+    const content = "Some text <important>critical info</important> more text";
+    const items = makeItems(["docker", content]);
+
+    renderWithProviders(<SkillReadyContentList items={items} />);
+
+    await user.click(screen.getByText("docker"));
+
+    // The important text should be rendered as bold (strong element)
+    const boldElement = screen.getByText("critical info");
+    expect(boldElement).toBeInTheDocument();
+    expect(boldElement.tagName).toBe("STRONG");
+  });
+
   it("parses and displays file path from metadata", async () => {
     const user = userEvent.setup();
     const content = [

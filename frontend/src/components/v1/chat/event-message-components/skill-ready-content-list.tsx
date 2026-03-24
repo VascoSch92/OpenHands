@@ -56,6 +56,17 @@ function parseSkillContent(content: string): ParsedSkillContent {
   };
 }
 
+/**
+ * Wraps `<important>...</important>` tags in the content with bold markers
+ * so the markdown renderer displays them as bold text.
+ */
+function styleImportantTags(text: string): string {
+  return text.replace(
+    /<important>([\s\S]*?)<\/important>/gi,
+    (_match, inner) => `**${inner.trim()}**`,
+  );
+}
+
 function SkillItemExpanded({ content }: { content: string }) {
   const { t } = useTranslation();
   const { matchInfo, filePath, body } = parseSkillContent(content);
@@ -64,7 +75,7 @@ function SkillItemExpanded({ content }: { content: string }) {
   return (
     <div className="pl-6 pr-2 pb-2">
       {hasMetadata && (
-        <div className="mb-3 text-xs text-neutral-400 space-y-1">
+        <div className="mb-3 text-sm text-neutral-400 space-y-1">
           {matchInfo && <p>{matchInfo}</p>}
           {filePath && (
             <p>
@@ -81,7 +92,7 @@ function SkillItemExpanded({ content }: { content: string }) {
 
       {hasMetadata && body && <hr className="border-neutral-700 mb-3" />}
 
-      {body && <MarkdownRenderer>{body}</MarkdownRenderer>}
+      {body && <MarkdownRenderer>{styleImportantTags(body)}</MarkdownRenderer>}
     </div>
   );
 }
@@ -109,11 +120,14 @@ export function SkillReadyContentList({ items }: SkillReadyContentListProps) {
         const isExpanded = expandedSkills[item.name] || false;
 
         return (
-          <div key={item.name} className="rounded-md overflow-hidden">
+          <div
+            key={item.name}
+            className="border border-neutral-700 rounded-md overflow-hidden"
+          >
             <button
               type="button"
               onClick={() => toggleSkill(item.name)}
-              className="w-full py-1.5 px-2 text-left flex items-center gap-2 hover:bg-neutral-700 transition-colors rounded-md cursor-pointer"
+              className="w-full py-1.5 px-2 text-left flex items-center gap-2 hover:bg-neutral-700 transition-colors cursor-pointer"
             >
               <span className="text-neutral-300">
                 {isExpanded ? (
