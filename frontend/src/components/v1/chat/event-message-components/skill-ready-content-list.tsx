@@ -142,7 +142,10 @@ export function SkillReadyContentList({ items }: SkillReadyContentListProps) {
             </button>
 
             {isExpanded && item.content && (
-              <SkillItemExpanded content={item.content} />
+              <>
+                <hr className="border-neutral-700" />
+                <SkillItemExpanded content={item.content} />
+              </>
             )}
           </div>
         );
