@@ -226,7 +226,7 @@ export function FileDiffViewer({ path, type }: FileDiffViewerProps) {
                   type="button"
                   onClick={() => setViewMode(mode)}
                   className={cn(
-                    "p-1 rounded transition-colors",
+                    "p-1 rounded transition-colors cursor-pointer",
                     viewMode === mode
                       ? "bg-neutral-600 text-white"
                       : "text-neutral-400 hover:bg-neutral-700 hover:text-neutral-200",
