@@ -16,6 +16,9 @@ import { cn } from "#/utils/utils";
 import ChevronUp from "#/icons/chveron-up.svg?react";
 import { useUnifiedGitDiff } from "#/hooks/query/use-unified-git-diff";
 import { MarkdownRenderer } from "#/components/features/markdown/markdown-renderer";
+import { Typography } from "#/ui/typography";
+import { LoadingSpinner } from "./loading-spinner";
+import { EditorContainer } from "./editor-container";
 
 type ViewMode = "diff" | "old" | "new";
 
@@ -42,22 +45,6 @@ const STATUS_MAP: Record<GitChangeStatus, string | IconType> = {
   U: "Untracked",
 };
 
-// TODO: Move out of this file and replace the current spinner with this one
-function LoadingSpinner({ className }: { className?: string }) {
-  return (
-    <div className="flex items-center justify-center">
-      <div
-        className={cn(
-          "animate-spin rounded-full border-4 border-gray-200 border-t-blue-500",
-          className,
-        )}
-        role="status"
-        aria-label="Loading"
-      />
-    </div>
-  );
-}
-
 const beforeMount = (monaco: Monaco) => {
   monaco.editor.defineTheme("custom-diff-theme", {
     base: "vs-dark",
@@ -79,23 +66,6 @@ const beforeMount = (monaco: Monaco) => {
     },
   });
 };
-
-function EditorContainer({
-  height,
-  children,
-}: {
-  height: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className="w-full border border-neutral-600 overflow-hidden"
-      style={{ height: `${height}px` }}
-    >
-      {children}
-    </div>
-  );
-}
 
 export interface FileDiffViewerProps {
   path: string;
@@ -167,7 +137,7 @@ export function FileDiffViewer({ path, type }: FileDiffViewerProps) {
   const status = (type === "U" ? STATUS_MAP.A : STATUS_MAP[type]) || "?";
   const statusIcon =
     typeof status === "string" ? (
-      <span>{status}</span>
+      <Typography.Text>{status}</Typography.Text>
     ) : (
       React.createElement(status, { className: "w-5 h-5" })
     );
