@@ -26,7 +26,14 @@ RUN apt-get update -y \
 
 COPY pyproject.toml poetry.lock ./
 RUN touch README.md
-RUN export POETRY_CACHE_DIR && poetry install --no-root && rm -rf $POETRY_CACHE_DIR
+# Workaround for Poetry failing to parse non-PEP-440 kernel versions on some hosts
+# (e.g., Fedora's "6.18.6-200.fc43.x86_64"). The .pth file sanitizes platform.release()
+# so Poetry's version constraint parser can handle it.
+RUN SITE_PKG=$(python3 -c "import site; print(site.getsitepackages()[0])") && \
+    echo "import platform; platform.release = (lambda _orig=platform.release: _orig().split('-')[0])" \
+      > "$SITE_PKG/fix_platform_release.pth" && \
+    export POETRY_CACHE_DIR && poetry install --no-root && rm -rf $POETRY_CACHE_DIR && \
+    rm -f "$SITE_PKG/fix_platform_release.pth"
 
 FROM base AS openhands-app
 
