@@ -289,11 +289,10 @@ export function ChatInterface() {
           {showV1Messages && v1UserEventsExist && (
             <V1Messages messages={v1UiEvents} allEvents={v1FullEvents} />
           )}
-
-          <BtwMessages conversationId={params.conversationId} />
         </div>
 
         <div className="flex flex-col gap-[6px]">
+          <BtwMessages conversationId={params.conversationId} />
           <div className="flex justify-between relative">
             <div className="flex items-end gap-1">
               <ConfirmationModeEnabled />
