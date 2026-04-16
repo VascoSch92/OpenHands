@@ -34,6 +34,7 @@ export default [
       route("billing", "routes/billing.tsx"),
       route("secrets", "routes/secrets-settings.tsx"),
       route("api-keys", "routes/api-keys.tsx"),
+      route("llm-profiles", "routes/llm-profiles.tsx"),
       route("org-members", "routes/manage-organization-members.tsx"),
       route("org", "routes/manage-org.tsx"),
     ]),

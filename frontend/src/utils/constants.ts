@@ -76,6 +76,9 @@ export const EPS = 1.5; // px tolerance for "near min" height comparisons
 /** The /btw slash command — asks a side question via the ask_agent endpoint. */
 export const BTW_COMMAND = "/btw";
 
+/** The /profiles slash command — prints stored LLM profiles inline. */
+export const PROFILES_COMMAND = "/profiles";
+
 /** Built-in slash commands surfaced in the menu for V1 conversations. */
 export const BUILT_IN_COMMANDS: SlashCommandItem[] = [
   {
@@ -95,6 +98,15 @@ export const BUILT_IN_COMMANDS: SlashCommandItem[] = [
       triggers: [BTW_COMMAND],
     },
     command: BTW_COMMAND,
+  },
+  {
+    skill: {
+      name: "profiles",
+      type: "agentskills",
+      content: "List the LLM profiles you have saved",
+      triggers: [PROFILES_COMMAND],
+    },
+    command: PROFILES_COMMAND,
   },
 ];
 

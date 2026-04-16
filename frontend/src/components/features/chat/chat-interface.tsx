@@ -5,6 +5,9 @@ import { useTranslation } from "react-i18next";
 import { convertImageToBase64 } from "#/utils/convert-image-to-base-64";
 import { createChatMessage } from "#/services/chat-service";
 import { BtwMessages } from "./btw-messages";
+import { ProfilesCommandMessages } from "./profiles-command-messages";
+import { useProfilesCommandStore } from "#/stores/profiles-command-store";
+import { PROFILES_COMMAND } from "#/utils/constants";
 import { InteractiveChatBox } from "./interactive-chat-box";
 import { AgentState } from "#/types/agent-state";
 import { useFilteredEvents } from "#/hooks/use-filtered-events";
@@ -78,6 +81,8 @@ export function ChatInterface() {
     isPending: isNewConversationPending,
   } = useNewConversationCommand();
 
+  const showProfilesCommand = useProfilesCommandStore((s) => s.show);
+
   const { curAgentState } = useAgentState();
   const { handleBuildPlanClick } = useHandleBuildPlanClick();
 
@@ -135,6 +140,17 @@ export function ChatInterface() {
     originalImages: File[],
     originalFiles: File[],
   ) => {
+    // Handle /profiles — show stored LLM profiles inline, don't send to agent
+    if (content.trim() === PROFILES_COMMAND) {
+      if (!params.conversationId) {
+        displayErrorToast(t(I18nKey.CONVERSATION$CLEAR_NO_ID));
+        return;
+      }
+      showProfilesCommand(params.conversationId);
+      setMessageToSend("");
+      return;
+    }
+
     // Handle /new command for V1 conversations
     if (content.trim() === "/new") {
       if (!params.conversationId) {
@@ -293,6 +309,7 @@ export function ChatInterface() {
 
         <div className="flex flex-col gap-[6px]">
           <BtwMessages conversationId={params.conversationId} />
+          <ProfilesCommandMessages conversationId={params.conversationId} />
           <div className="flex justify-between relative">
             <div className="flex items-end gap-1">
               <ConfirmationModeEnabled />

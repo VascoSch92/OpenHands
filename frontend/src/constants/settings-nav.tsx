@@ -1,4 +1,4 @@
-import { FiUsers, FiBriefcase } from "react-icons/fi";
+import { FiUsers, FiBriefcase, FiLayers } from "react-icons/fi";
 import CreditCardIcon from "#/icons/credit-card.svg?react";
 import KeyIcon from "#/icons/key.svg?react";
 import LightbulbIcon from "#/icons/lightbulb.svg?react";
@@ -59,6 +59,12 @@ export const SAAS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <CircuitIcon width={22} height={22} />,
     to: "/settings",
     text: "COMMON$LANGUAGE_MODEL_LLM",
+    section: "personal",
+  },
+  {
+    icon: <FiLayers size={22} />,
+    to: "/settings/llm-profiles",
+    text: "SETTINGS$NAV_LLM_PROFILES",
     section: "personal",
   },
   {
@@ -128,6 +134,11 @@ export const OSS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <CircuitIcon width={22} height={22} />,
     to: "/settings",
     text: "SETTINGS$NAV_LLM",
+  },
+  {
+    icon: <FiLayers size={22} />,
+    to: "/settings/llm-profiles",
+    text: "SETTINGS$NAV_LLM_PROFILES",
   },
   {
     icon: <MemoryIcon width={22} height={22} />,
