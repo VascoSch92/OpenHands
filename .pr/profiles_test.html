@@ -1,0 +1,570 @@
+<!doctype html>
+<!--
+  LLM Profiles — throwaway test page for /api/v1/settings/profiles endpoints.
+
+  How to run:
+
+  1) One-time setup — symlink this file into the frontend's public dir so
+     the Vite dev server serves it from the same origin that already has
+     your session cookie (no CORS, no manual auth):
+
+       ln -s ../../.pr/profiles_test.html \
+             frontend/public/profiles_test.html
+
+  2) Start the backend on :3000 and the frontend dev server on :3001
+     (Vite proxies /api → :3000):
+
+       # terminal 1
+       make start-backend
+       # terminal 2
+       make start-frontend
+
+  3) Log in to OpenHands once at http://localhost:3001 so the session
+     cookie is set.
+
+  4) Open http://localhost:3001/profiles_test.html.
+
+  The page auto-fills "Base URL" with window.location.origin
+  (http://localhost:3001), and every fetch uses credentials: "include"
+  so the cookie is sent. Click Refresh to list profiles; use the form
+  to save / activate / delete.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LLM Profiles Test</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --border: #d4d4d8;
+        --border-strong: #a1a1aa;
+        --muted: #71717a;
+        --bg-soft: #f4f4f5;
+        --bg-card: #ffffff;
+        --accent: #2563eb;
+        --accent-hover: #1d4ed8;
+        --danger: #dc2626;
+        --danger-hover: #b91c1c;
+        --success: #16a34a;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --border: #3f3f46;
+          --border-strong: #52525b;
+          --muted: #a1a1aa;
+          --bg-soft: #27272a;
+          --bg-card: #18181b;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+        font-family:
+          ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        max-width: 960px;
+        margin-inline: auto;
+        line-height: 1.5;
+      }
+      h1 {
+        margin: 0 0 4px;
+        font-size: 24px;
+      }
+      p.subtitle {
+        color: var(--muted);
+        margin: 0 0 24px;
+        font-size: 14px;
+      }
+      section {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 16px;
+        background: var(--bg-card);
+      }
+      h2 {
+        margin: 0 0 16px;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        color: var(--muted);
+      }
+      label {
+        display: block;
+        font-size: 13px;
+        margin-bottom: 6px;
+        font-weight: 500;
+      }
+      input[type="text"],
+      input[type="password"] {
+        width: 100%;
+        padding: 9px 11px;
+        border: 1px solid var(--border-strong);
+        border-radius: 6px;
+        font: inherit;
+        background: var(--bg-card);
+        color: inherit;
+      }
+      input:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+      }
+      .field-hint {
+        display: block;
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+      .grid-2 {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 14px;
+      }
+      .actions-bar {
+        display: flex;
+        gap: 8px;
+        margin-top: 16px;
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 8px 14px;
+        border: 1px solid var(--border-strong);
+        background: var(--bg-card);
+        border-radius: 6px;
+        cursor: pointer;
+        font: inherit;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        transition:
+          background 80ms ease,
+          border-color 80ms ease;
+      }
+      button:hover {
+        background: var(--bg-soft);
+      }
+      button.primary {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+      }
+      button.primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+      button.danger {
+        color: var(--danger);
+        border-color: var(--danger);
+      }
+      button.danger:hover {
+        background: var(--danger);
+        color: #fff;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      .profile-card {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 16px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 10px;
+      }
+      .profile-card.active {
+        border-color: var(--accent);
+        background: rgba(37, 99, 235, 0.06);
+      }
+      .profile-card h3 {
+        margin: 0 0 4px;
+        font-size: 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .profile-card p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--muted);
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        word-break: break-all;
+      }
+      .profile-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        background: var(--accent);
+        color: #fff;
+      }
+      .empty {
+        color: var(--muted);
+        font-style: italic;
+        text-align: center;
+        padding: 24px 0;
+      }
+      #log {
+        white-space: pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        background: var(--bg-soft);
+        padding: 12px;
+        border-radius: 6px;
+        max-height: 240px;
+        overflow: auto;
+        margin: 0;
+      }
+      .status-line {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+        display: inline-block;
+      }
+      .dot.ok {
+        background: var(--success);
+      }
+      .dot.err {
+        background: var(--danger);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>LLM Profiles</h1>
+    <p class="subtitle">
+      Test page for the <code>/api/v1/settings/profiles</code> endpoints. Open
+      via the frontend dev server so your session cookie is sent.
+    </p>
+
+    <section>
+      <h2>Connection</h2>
+      <div class="grid-2">
+        <div>
+          <label for="baseUrl">Base URL</label>
+          <input id="baseUrl" type="text" placeholder="http://localhost:3001" />
+          <span class="field-hint"
+            >Use the frontend dev server URL — it proxies
+            <code>/api</code> to the backend with auth.</span
+          >
+        </div>
+        <div>
+          <label>&nbsp;</label>
+          <div class="status-line">
+            <span id="statusDot" class="dot"></span>
+            <span id="statusText">Not checked</span>
+          </div>
+        </div>
+      </div>
+      <div class="actions-bar">
+        <button id="refreshBtn" class="primary">↻ Refresh profiles</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Create a profile</h2>
+      <div class="grid-2">
+        <div>
+          <label for="newName">Profile name</label>
+          <input id="newName" type="text" placeholder="my-gpt4" />
+        </div>
+        <div>
+          <label for="newProvider">Provider</label>
+          <input
+            id="newProvider"
+            type="text"
+            placeholder="openai, anthropic, openhands, …"
+          />
+          <span class="field-hint"
+            >Prepended to the model name
+            (e.g. <code>openai/gpt-4o</code>).</span
+          >
+        </div>
+        <div>
+          <label for="newModel">Model</label>
+          <input id="newModel" type="text" placeholder="gpt-4o" />
+          <span class="field-hint"
+            >Or paste a full <code>provider/model</code> here and leave
+            Provider empty.</span
+          >
+        </div>
+        <div>
+          <label for="newBaseUrl">Base URL (optional)</label>
+          <input
+            id="newBaseUrl"
+            type="text"
+            placeholder="https://api.openai.com/v1"
+          />
+        </div>
+        <div style="grid-column: 1 / -1">
+          <label for="newApiKey">API key</label>
+          <input id="newApiKey" type="password" placeholder="sk-…" />
+          <span class="field-hint"
+            >Stored in the profile. Leave blank for local models that don't
+            need a key.</span
+          >
+        </div>
+      </div>
+      <div class="actions-bar">
+        <button id="createBtn" class="primary">💾 Save profile</button>
+        <button id="snapshotBtn">
+          📸 Save current <code>agent_settings.llm</code> as profile
+        </button>
+      </div>
+    </section>
+
+    <section>
+      <h2>Saved profiles</h2>
+      <div id="profilesContainer">
+        <p class="empty">Loading…</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Request log</h2>
+      <pre id="log">—</pre>
+    </section>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const baseUrlInput = $("baseUrl");
+      const logEl = $("log");
+      const container = $("profilesContainer");
+      const statusDot = $("statusDot");
+      const statusText = $("statusText");
+
+      baseUrlInput.value = window.location.origin.startsWith("file://")
+        ? "http://localhost:3001"
+        : window.location.origin;
+
+      const log = (msg, data) => {
+        const ts = new Date().toISOString().slice(11, 19);
+        const line =
+          data !== undefined
+            ? `[${ts}] ${msg}\n${JSON.stringify(data, null, 2)}`
+            : `[${ts}] ${msg}`;
+        logEl.textContent = `${line}\n\n${logEl.textContent}`.slice(0, 10000);
+      };
+
+      const apiUrl = (path) =>
+        `${baseUrlInput.value.replace(/\/+$/, "")}/api/v1/settings${path}`;
+
+      async function request(method, path, body) {
+        const opts = {
+          method,
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+        };
+        if (body !== undefined) opts.body = JSON.stringify(body);
+        const res = await fetch(apiUrl(path), opts);
+        let data = null;
+        try {
+          data = await res.json();
+        } catch (_) {}
+        if (!res.ok) {
+          const err = new Error(
+            `${method} ${path} → ${res.status} ${res.statusText}`,
+          );
+          err.data = data;
+          throw err;
+        }
+        return data;
+      }
+
+      function setStatus(state, text) {
+        statusDot.className = `dot ${state}`;
+        statusText.textContent = text;
+      }
+
+      async function loadProfiles() {
+        container.innerHTML = `<p class="empty">Loading…</p>`;
+        try {
+          const data = await request("GET", "/profiles");
+          log("GET /profiles", data);
+          setStatus("ok", `Connected · ${data.profiles.length} profile(s)`);
+          renderProfiles(data);
+        } catch (err) {
+          setStatus("err", "Request failed — check base URL + login");
+          log(err.message, err.data ?? undefined);
+          container.innerHTML = `<p class="empty">Failed to load. See log.</p>`;
+        }
+      }
+
+      function renderProfiles(data) {
+        const profiles = data?.profiles ?? [];
+        const active = data?.active_profile ?? null;
+
+        if (profiles.length === 0) {
+          container.innerHTML = `<p class="empty">No profiles saved yet. Create one above.</p>`;
+          return;
+        }
+
+        container.innerHTML = profiles
+          .map((p) => {
+            const isActive = p.name === active;
+            return `
+              <div class="profile-card ${isActive ? "active" : ""}">
+                <div>
+                  <h3>
+                    ${escapeHtml(p.name)}
+                    ${isActive ? '<span class="badge">Active</span>' : ""}
+                  </h3>
+                  <p>model: ${escapeHtml(p.model ?? "—")}</p>
+                  <p>base_url: ${escapeHtml(p.base_url ?? "—")}</p>
+                </div>
+                <div class="profile-actions">
+                  <button data-action="activate" data-name="${escapeAttr(p.name)}" ${isActive ? "disabled" : ""}>
+                    ✓ Use this
+                  </button>
+                  <button data-action="inspect" data-name="${escapeAttr(p.name)}">
+                    🔍 Inspect
+                  </button>
+                  <button class="danger" data-action="delete" data-name="${escapeAttr(p.name)}">
+                    🗑 Delete
+                  </button>
+                </div>
+              </div>
+            `;
+          })
+          .join("");
+      }
+
+      function escapeHtml(s) {
+        return String(s).replace(/[&<>"']/g, (c) =>
+          ({
+            "&": "&amp;",
+            "<": "&lt;",
+            ">": "&gt;",
+            '"': "&quot;",
+            "'": "&#39;",
+          })[c],
+        );
+      }
+      function escapeAttr(s) {
+        return escapeHtml(s);
+      }
+
+      container.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-action]");
+        if (!btn) return;
+        const name = btn.dataset.name;
+        const action = btn.dataset.action;
+        try {
+          if (action === "activate") {
+            const data = await request(
+              "POST",
+              `/profiles/${encodeURIComponent(name)}/activate`,
+            );
+            log(`POST /profiles/${name}/activate`, data);
+            await loadProfiles();
+          } else if (action === "delete") {
+            if (!confirm(`Delete profile "${name}"?`)) return;
+            const data = await request(
+              "DELETE",
+              `/profiles/${encodeURIComponent(name)}`,
+            );
+            log(`DELETE /profiles/${name}`, data);
+            await loadProfiles();
+          } else if (action === "inspect") {
+            const data = await request(
+              "GET",
+              `/profiles/${encodeURIComponent(name)}`,
+            );
+            log(`GET /profiles/${name}`, data);
+          }
+        } catch (err) {
+          log(err.message, err.data ?? undefined);
+        }
+      });
+
+      function buildModelString() {
+        const provider = $("newProvider").value.trim();
+        const model = $("newModel").value.trim();
+        if (!model) return "";
+        if (!provider) return model;
+        if (model.includes("/")) return model;
+        return `${provider.replace(/\/+$/, "")}/${model}`;
+      }
+
+      $("createBtn").addEventListener("click", async () => {
+        const name = $("newName").value.trim();
+        const model = buildModelString();
+        const baseUrl = $("newBaseUrl").value.trim();
+        const apiKey = $("newApiKey").value;
+
+        if (!name) {
+          log("Enter a profile name first.");
+          return;
+        }
+        if (!model) {
+          log("Enter a model (or provider + model).");
+          return;
+        }
+
+        const llm = { model };
+        if (baseUrl) llm.base_url = baseUrl;
+        if (apiKey) llm.api_key = apiKey;
+
+        try {
+          const data = await request(
+            "POST",
+            `/profiles/${encodeURIComponent(name)}`,
+            { include_secrets: true, llm },
+          );
+          log(`POST /profiles/${name}`, data);
+          $("newName").value = "";
+          $("newApiKey").value = "";
+          await loadProfiles();
+        } catch (err) {
+          log(err.message, err.data ?? undefined);
+        }
+      });
+
+      $("snapshotBtn").addEventListener("click", async () => {
+        const name = $("newName").value.trim();
+        if (!name) {
+          log("Enter a profile name first (it's used for the snapshot).");
+          return;
+        }
+        try {
+          const data = await request(
+            "POST",
+            `/profiles/${encodeURIComponent(name)}`,
+            { include_secrets: true },
+          );
+          log(`POST /profiles/${name} (snapshot of current LLM)`, data);
+          $("newName").value = "";
+          await loadProfiles();
+        } catch (err) {
+          log(err.message, err.data ?? undefined);
+        }
+      });
+
+      $("refreshBtn").addEventListener("click", loadProfiles);
+      baseUrlInput.addEventListener("change", loadProfiles);
+
+      loadProfiles();
+    </script>
+  </body>
+</html>
