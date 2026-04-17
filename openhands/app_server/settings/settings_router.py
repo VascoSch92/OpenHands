@@ -10,7 +10,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from openhands.app_server.secrets.secrets_models import Secrets
 from openhands.app_server.secrets.secrets_store import SecretsStore
@@ -36,6 +36,7 @@ from openhands.server.user_auth import (
     get_user_settings_store,
 )
 from openhands.storage.data_models.llm_profiles import (
+    ProfileAlreadyExistsError,
     ProfileLimitExceededError,
     ProfileNotFoundError,
     StrictLLM,
@@ -373,6 +374,21 @@ class ActivateProfileResponse(BaseModel):
     model: str | None = None
 
 
+class RenameProfileRequest(BaseModel):
+    """Request body for renaming a profile.
+
+    ``new_name`` is validated against the same regex as the path-level
+    ``{name}`` param so the two stay in sync.
+    """
+
+    new_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        pattern=_NAME_PATTERN,
+    )
+
+
 class SaveProfileRequest(BaseModel):
     """Request body for saving a profile.
 
@@ -546,4 +562,42 @@ async def activate_profile(
         name=name,
         message=f"Switched to profile '{name}'",
         model=settings.agent_settings.llm.model,
+    )
+
+
+@router.post('/profiles/{name}/rename', response_model=ProfileMutationResponse)
+async def rename_profile(
+    name: ProfileName,
+    request: RenameProfileRequest,
+    user_id: str | None = Depends(get_user_id),
+    settings_store: SettingsStore = Depends(get_user_settings_store),
+) -> ProfileMutationResponse:
+    """Rename a saved profile.
+
+    Preserves the stored LLM config (including the api_key) and the active
+    flag if the renamed profile was active. Returns 409 if ``new_name`` is
+    already in use by a different profile.
+    """
+    async with _user_profile_locks[_profile_lock_key(user_id)]:
+        settings = await settings_store.load()
+        if settings is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Settings not found',
+            )
+        try:
+            settings.llm_profiles.rename(name, request.new_name)
+        except ProfileNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+        except ProfileAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        await settings_store.store(settings)
+
+    return ProfileMutationResponse(
+        name=request.new_name,
+        message=f"Profile '{name}' renamed to '{request.new_name}'",
     )
