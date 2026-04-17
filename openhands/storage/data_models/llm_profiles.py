@@ -39,6 +39,14 @@ class ProfileLimitExceededError(ValueError):
         )
 
 
+class ProfileAlreadyExistsError(ValueError):
+    """Raised when a rename target collides with an existing profile."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        super().__init__(f"Profile '{name}' already exists")
+
+
 class StrictLLM(LLM):
     """LLM variant that rejects unknown fields.
 
@@ -148,6 +156,39 @@ class LLMProfiles(BaseModel):
 
         update = {} if include_secrets else {'api_key': None}
         self.profiles[name] = llm.model_copy(update=update)
+
+    def rename(self, old_name: str, new_name: str) -> None:
+        """Rename a profile, preserving stored LLM config, insertion order, and
+        the active flag (if the renamed profile was active).
+
+        Raises :class:`ProfileNotFoundError` if ``old_name`` doesn't exist,
+        or :class:`ProfileAlreadyExistsError` if ``new_name`` is already taken
+        by a different profile.
+        """
+        if old_name not in self.profiles:
+            raise ProfileNotFoundError(old_name)
+        if new_name == old_name:
+            return
+        if new_name in self.profiles:
+            raise ProfileAlreadyExistsError(new_name)
+
+        # Capture the active name *before* reassigning ``profiles`` — the
+        # model_validator runs on assignment and would null out ``active``
+        # (old_name no longer exists in the rebuilt dict), so we'd lose the
+        # signal otherwise.
+        was_active = self.active == old_name
+
+        # Rebuild to preserve insertion order — the renamed profile keeps
+        # the slot of the old one rather than moving to the end.
+        renamed: dict[str, LLM] = {
+            (new_name if key == old_name else key): llm
+            for key, llm in self.profiles.items()
+        }
+        self.profiles = renamed
+        if was_active:
+            # Bypass validate_assignment since we know the invariant holds
+            # (new_name is now a key of self.profiles).
+            object.__setattr__(self, 'active', new_name)
 
     def delete(self, name: str) -> bool:
         """Delete a profile. Returns True if the profile existed.
