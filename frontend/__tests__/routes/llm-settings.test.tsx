@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { organizationService } from "#/api/organization-service/organization-service.api";
+import ProfilesService from "#/api/settings-service/profiles-service.api";
 import SettingsService from "#/api/settings-service/settings-service.api";
 import {
   MOCK_DEFAULT_USER_SETTINGS,
@@ -13,6 +14,54 @@ import LlmSettingsScreen, { clientLoader } from "#/routes/llm-settings";
 import { useSelectedOrganizationStore } from "#/stores/selected-organization-store";
 import { Organization, OrganizationMember } from "#/types/org";
 import { Settings, SettingsValue } from "#/types/settings";
+
+// ProfilesService is mocked because the LLM screen's auto-profile flow
+// calls save + activate after every successful settings save. The default
+// resolved values are reapplied in beforeEach — the existing suite-wide
+// ``vi.restoreAllMocks()`` would otherwise wipe them between tests.
+vi.mock("#/api/settings-service/profiles-service.api", () => ({
+  default: {
+    listProfiles: vi.fn(),
+    saveProfile: vi.fn(),
+    deleteProfile: vi.fn(),
+    activateProfile: vi.fn(),
+    renameProfile: vi.fn(),
+  },
+}));
+
+function resetProfilesServiceDefaults() {
+  vi.mocked(ProfilesService.listProfiles)
+    .mockReset()
+    .mockResolvedValue({ profiles: [], active_profile: null });
+  vi.mocked(ProfilesService.saveProfile).mockReset().mockResolvedValue(undefined);
+  vi.mocked(ProfilesService.deleteProfile)
+    .mockReset()
+    .mockResolvedValue(undefined);
+  vi.mocked(ProfilesService.activateProfile)
+    .mockReset()
+    .mockResolvedValue(undefined);
+  vi.mocked(ProfilesService.renameProfile)
+    .mockReset()
+    .mockResolvedValue(undefined);
+}
+
+// Stub the profile mutation hooks so auto-save doesn't invalidate the
+// settings query — tests in this file pin exact getSettings call counts.
+// The mutateAsync implementations forward to the service mock so the
+// auto-profile tests can still assert what was called.
+vi.mock("#/hooks/mutation/use-save-llm-profile", () => ({
+  useSaveLlmProfile: () => ({
+    mutateAsync: (vars: { name: string; request?: unknown }) =>
+      ProfilesService.saveProfile(vars.name, vars.request as never),
+    isPending: false,
+  }),
+}));
+vi.mock("#/hooks/mutation/use-activate-llm-profile", () => ({
+  useActivateLlmProfile: () => ({
+    mutateAsync: (name: string) => ProfilesService.activateProfile(name),
+    isPending: false,
+  }),
+}));
 
 const mockUseSearchParams = vi.fn();
 vi.mock("react-router", async () => {
@@ -144,18 +193,24 @@ async function selectModel(modelLabel: string) {
   return modelInput;
 }
 
-function renderLlmSettingsScreen({
+async function renderLlmSettingsScreen({
   appMode = "oss",
   organizationId = "1",
   meData,
   organizations,
   scope = "personal",
+  view = "form",
 }: {
   appMode?: "oss" | "saas";
   organizationId?: string;
   meData?: OrganizationMember;
   organizations?: Organization[];
   scope?: "personal" | "org";
+  // Personal scope now lands on the Available Models list by default; set
+  // ``view`` to ``"form"`` (the default) to auto-click into the SDK form
+  // so existing form-oriented assertions keep working unchanged, or to
+  // ``"profiles"`` to test the list view itself.
+  view?: "form" | "profiles";
 } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -183,15 +238,22 @@ function renderLlmSettingsScreen({
     });
   }
 
-  return render(<LlmSettingsScreen scope={scope} />, {
+  const rendered = render(<LlmSettingsScreen scope={scope} />, {
     wrapper: ({ children }) => (
       <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     ),
   });
+
+  if (scope === "personal" && view === "form") {
+    await userEvent.click(await screen.findByTestId("add-llm-profile"));
+  }
+
+  return rendered;
 }
 
 beforeEach(() => {
   vi.restoreAllMocks();
+  resetProfilesServiceDefaults();
   resetTestHandlersMockSettings();
   mockUseSearchParams.mockReturnValue([{ get: () => null }, vi.fn()]);
   mockUseConfig.mockReturnValue({
@@ -205,7 +267,7 @@ describe("LlmSettingsScreen", () => {
   it("renders the schema-driven basic LLM form in OSS mode", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(buildSettings());
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-screen");
     expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
@@ -229,7 +291,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-advanced");
     expect(screen.getByTestId("llm-custom-model-input")).toBeInTheDocument();
@@ -282,7 +344,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
     await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
@@ -332,7 +394,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-advanced");
 
@@ -353,7 +415,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-screen");
 
@@ -429,7 +491,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
+    await renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
 
     await screen.findByTestId("llm-settings-form-basic");
     expect(
@@ -480,7 +542,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "saas" });
+    await renderLlmSettingsScreen({ appMode: "saas" });
 
     await screen.findByTestId("llm-settings-form-basic");
     expect(
@@ -494,7 +556,7 @@ describe("LlmSettingsScreen", () => {
   it("hides the API key input for OpenHands provider in SaaS mode", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(buildSettings());
 
-    renderLlmSettingsScreen({ appMode: "saas" });
+    await renderLlmSettingsScreen({ appMode: "saas" });
 
     await screen.findByTestId("llm-settings-screen");
     expect(screen.queryByTestId("llm-api-key-input")).not.toBeInTheDocument();
@@ -509,7 +571,7 @@ describe("LlmSettingsScreen", () => {
       }),
     );
 
-    renderLlmSettingsScreen({ appMode: "saas" });
+    await renderLlmSettingsScreen({ appMode: "saas" });
 
     await screen.findByTestId("llm-settings-screen");
     expect(screen.getByTestId("llm-api-key-input")).toBeInTheDocument();
@@ -518,7 +580,7 @@ describe("LlmSettingsScreen", () => {
   it("keeps personal settings editable for team members in SaaS mode", async () => {
     vi.spyOn(SettingsService, "getSettings").mockResolvedValue(buildSettings());
 
-    renderLlmSettingsScreen({
+    await renderLlmSettingsScreen({
       appMode: "saas",
       meData: buildOrganizationMember({ role: "member" }),
     });
@@ -533,7 +595,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({
+      await renderLlmSettingsScreen({
         appMode: "saas",
         organizationId: "3",
         meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
@@ -550,7 +612,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({
+      await renderLlmSettingsScreen({
         appMode: "saas",
         organizationId: "2",
         meData: buildOrganizationMember({ org_id: "2", role: "member" }),
@@ -567,7 +629,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({
+      await renderLlmSettingsScreen({
         appMode: "saas",
         organizationId: "1",
         meData: buildOrganizationMember({ org_id: "1", role: "owner" }),
@@ -585,7 +647,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({ appMode: "oss" });
+      await renderLlmSettingsScreen({ appMode: "oss" });
 
       await screen.findByTestId("llm-settings-screen");
       expect(
@@ -605,7 +667,7 @@ describe("LlmSettingsScreen", () => {
       .spyOn(SettingsService, "saveSettings")
       .mockResolvedValue(true);
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     const apiKeyInput = await screen.findByTestId("llm-api-key-input");
     await userEvent.type(apiKeyInput, "test-api-key");
@@ -693,7 +755,7 @@ describe("LlmSettingsScreen", () => {
       .spyOn(SettingsService, "saveSettings")
       .mockResolvedValue(true);
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-advanced");
     await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
@@ -761,7 +823,7 @@ describe("LlmSettingsScreen", () => {
         return true;
       });
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
 
@@ -829,7 +891,7 @@ describe("LlmSettingsScreen", () => {
         return true;
       });
 
-    renderLlmSettingsScreen({ appMode: "saas" });
+    await renderLlmSettingsScreen({ appMode: "saas" });
 
     await screen.findByTestId("llm-settings-form-basic");
 
@@ -904,7 +966,7 @@ describe("LlmSettingsScreen", () => {
         return persistedSettings;
       });
 
-    renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
+    await renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
 
     await screen.findByTestId("llm-settings-form-advanced");
     await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
@@ -978,7 +1040,7 @@ describe("LlmSettingsScreen", () => {
         return true;
       });
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-advanced");
     await userEvent.click(screen.getByTestId("sdk-section-basic-toggle"));
@@ -1046,7 +1108,7 @@ describe("LlmSettingsScreen", () => {
         return true;
       });
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
     await selectProvider("OpenAI");
@@ -1087,7 +1149,7 @@ describe("LlmSettingsScreen", () => {
       buildSettingsWithAdvancedToggle(),
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
     await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
@@ -1186,7 +1248,7 @@ describe("LlmSettingsScreen", () => {
       },
     );
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
     await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
@@ -1259,7 +1321,7 @@ describe("LlmSettingsScreen", () => {
       return true;
     });
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-basic");
     expect(
@@ -1299,7 +1361,7 @@ describe("LlmSettingsScreen", () => {
       .spyOn(SettingsService, "saveSettings")
       .mockResolvedValue(true);
 
-    renderLlmSettingsScreen({ appMode: "oss" });
+    await renderLlmSettingsScreen({ appMode: "oss" });
 
     const baseUrlInput = await screen.findByTestId("base-url-input");
     await userEvent.type(baseUrlInput, "/extra");
@@ -1330,7 +1392,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({ appMode: "saas" });
+      await renderLlmSettingsScreen({ appMode: "saas" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1356,7 +1418,7 @@ describe("LlmSettingsScreen", () => {
         }),
       );
 
-      renderLlmSettingsScreen({ appMode: "saas" });
+      await renderLlmSettingsScreen({ appMode: "saas" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1379,7 +1441,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({ appMode: "oss" });
+      await renderLlmSettingsScreen({ appMode: "oss" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1405,7 +1467,7 @@ describe("LlmSettingsScreen", () => {
         }),
       );
 
-      renderLlmSettingsScreen({ appMode: "oss" });
+      await renderLlmSettingsScreen({ appMode: "oss" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1431,7 +1493,7 @@ describe("LlmSettingsScreen", () => {
         }),
       );
 
-      renderLlmSettingsScreen({ appMode: "saas" });
+      await renderLlmSettingsScreen({ appMode: "saas" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1456,7 +1518,7 @@ describe("LlmSettingsScreen", () => {
         buildSettings(),
       );
 
-      renderLlmSettingsScreen({ appMode: "saas" });
+      await renderLlmSettingsScreen({ appMode: "saas" });
       await screen.findByTestId("llm-settings-screen");
 
       const basicForm = screen.getByTestId("llm-settings-form-basic");
@@ -1485,7 +1547,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "2",
           meData: buildOrganizationMember({ org_id: "2", role: "member" }),
@@ -1510,7 +1572,7 @@ describe("LlmSettingsScreen", () => {
           buildSettings(),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "2",
           meData: buildOrganizationMember({ org_id: "2", role: "member" }),
@@ -1525,7 +1587,7 @@ describe("LlmSettingsScreen", () => {
           buildSettingsWithAdvancedToggle(),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "2",
           meData: buildOrganizationMember({ org_id: "2", role: "member" }),
@@ -1554,7 +1616,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "1",
           meData: buildOrganizationMember({ org_id: "1", role: "owner" }),
@@ -1582,7 +1644,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "1",
           meData: buildOrganizationMember({ org_id: "1", role: "owner" }),
@@ -1616,7 +1678,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "1",
           meData: buildOrganizationMember({ org_id: "1", role: "owner" }),
@@ -1647,7 +1709,7 @@ describe("LlmSettingsScreen", () => {
           .spyOn(SettingsService, "saveSettings")
           .mockResolvedValue(true);
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "1",
           meData: buildOrganizationMember({ org_id: "1", role: "owner" }),
@@ -1675,7 +1737,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "3",
           meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
@@ -1703,7 +1765,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "3",
           meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
@@ -1737,7 +1799,7 @@ describe("LlmSettingsScreen", () => {
           }),
         );
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "3",
           meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
@@ -1768,7 +1830,7 @@ describe("LlmSettingsScreen", () => {
           .spyOn(SettingsService, "saveSettings")
           .mockResolvedValue(true);
 
-        renderLlmSettingsScreen({
+        await renderLlmSettingsScreen({
           appMode: "saas",
           organizationId: "3",
           meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
@@ -1791,6 +1853,114 @@ describe("LlmSettingsScreen", () => {
       it("should export a clientLoader for route protection", () => {
         expect(clientLoader).toBeTypeOf("function");
       });
+    });
+  });
+
+  // ── Auto-profile flow ───────────────────────────────────────────────
+  //
+  // After a successful LLM settings save the screen should snapshot the
+  // just-saved agent_settings.llm into a profile named after the model
+  // and activate it — that's how Profiles tab populates in the first
+  // place. These tests pin that chain.
+
+  describe("auto-profile on save", () => {
+    it("saves + activates a profile named after the model after a personal-scope save", async () => {
+      vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+        buildSettings({
+          llm_model: "openai/gpt-4o",
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+      vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
+
+      await renderLlmSettingsScreen({ appMode: "oss" });
+
+      await userEvent.type(
+        await screen.findByTestId("llm-api-key-input"),
+        "test-api-key",
+      );
+      await userEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(ProfilesService.saveProfile).toHaveBeenCalledWith(
+          "openai_gpt-4o",
+          { include_secrets: true },
+        );
+      });
+      await waitFor(() => {
+        expect(ProfilesService.activateProfile).toHaveBeenCalledWith(
+          "openai_gpt-4o",
+        );
+      });
+    });
+
+    it("does NOT auto-save a profile on the org-default settings screen", async () => {
+      // Org defaults reuse this screen with scope="org". Profiles are a
+      // per-user feature, so touching the profiles endpoints here would
+      // incorrectly spawn profiles on the signed-in user's settings.
+      vi.spyOn(organizationService, "getOrganizationAgentSettings").mockResolvedValue(
+        buildSettings({
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+      vi.spyOn(
+        organizationService,
+        "saveOrganizationAgentSettings",
+      ).mockResolvedValue({
+        agent_settings: {},
+        conversation_settings: {},
+        search_api_key: undefined,
+        llm_api_key_set: false,
+      });
+
+      await renderLlmSettingsScreen({
+        appMode: "saas",
+        scope: "org",
+        organizationId: "3",
+        meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
+      });
+
+      await userEvent.type(
+        await screen.findByTestId("llm-api-key-input"),
+        "test-api-key",
+      );
+      await userEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(organizationService.saveOrganizationAgentSettings).toHaveBeenCalled();
+      });
+      expect(ProfilesService.saveProfile).not.toHaveBeenCalled();
+      expect(ProfilesService.activateProfile).not.toHaveBeenCalled();
+    });
+
+    it("swallows profile-save failures so the user still sees the settings-saved toast", async () => {
+      // If the profiles endpoint is down (e.g. hit the MAX_PROFILES_PER_USER
+      // cap), the settings save itself must still be treated as succeeded.
+      vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+        buildSettings({
+          llm_model: "openai/gpt-4o",
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+      vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
+      vi.mocked(ProfilesService.saveProfile).mockRejectedValueOnce(
+        new Error("409 conflict"),
+      );
+
+      await renderLlmSettingsScreen({ appMode: "oss" });
+
+      await userEvent.type(
+        await screen.findByTestId("llm-api-key-input"),
+        "test-api-key",
+      );
+      await userEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(ProfilesService.saveProfile).toHaveBeenCalled();
+      });
+      // Activate must NOT run when save already failed — otherwise we'd
+      // activate a profile that doesn't exist on the backend.
+      expect(ProfilesService.activateProfile).not.toHaveBeenCalled();
     });
   });
 });

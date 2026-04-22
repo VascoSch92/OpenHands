@@ -75,6 +75,7 @@ export function SdkSectionPage({
   buildPayload,
   onSaveSuccess,
   getInitialView,
+  trailingActions,
   testId = "sdk-section-settings-screen",
 }: {
   sectionKeys: string[];
@@ -97,6 +98,10 @@ export function SdkSectionPage({
     settings: Settings,
     filteredSchema: SettingsSchema,
   ) => SettingsView;
+  // Extra buttons slotted into the Basic/Advanced/All control strip,
+  // after the view toggles. Used by the LLM page to drop a Profiles
+  // navigation button into the same row.
+  trailingActions?: React.ReactNode;
   testId?: string;
 }) {
   const { t } = useTranslation();
@@ -274,6 +279,7 @@ export function SdkSectionPage({
         showAdvanced={showAdvanced}
         showAll={showAll}
         isDisabled={isReadOnly}
+        trailing={trailingActions}
       />
 
       <div className="flex flex-col gap-8 pb-20">
