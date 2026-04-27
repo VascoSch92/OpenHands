@@ -175,6 +175,8 @@ def settings_store(async_session_maker, mock_config):
                 del item_dict['email_verified']
             if 'secrets_store' in item_dict:
                 del item_dict['secrets_store']
+            if 'llm_profiles' in item_dict:
+                del item_dict['llm_profiles']
 
             # Encrypt the data before storing
             for key in ('llm_api_key', 'search_api_key', 'sandbox_api_key'):
