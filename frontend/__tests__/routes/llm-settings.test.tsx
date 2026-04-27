@@ -193,6 +193,13 @@ async function selectModel(modelLabel: string) {
   return modelInput;
 }
 
+
+function getPayloadAgentSettings(
+  payload: Record<string, unknown>,
+): Record<string, unknown> {
+  return (payload.agent_settings_diff as Record<string, unknown>) ?? {};
+}
+
 async function renderLlmSettingsScreen({
   appMode = "oss",
   organizationId = "1",
@@ -294,6 +301,49 @@ describe("LlmSettingsScreen", () => {
     await renderLlmSettingsScreen({ appMode: "oss" });
 
     await screen.findByTestId("llm-settings-form-advanced");
+    expect(screen.getByTestId("llm-custom-model-input")).toBeInTheDocument();
+    expect(screen.getByTestId("base-url-input")).toBeInTheDocument();
+  });
+
+  it("shows Advanced and All toggles in OSS mode for the default LLM route schema", async () => {
+    vi.spyOn(SettingsService, "getSettings").mockResolvedValue(buildSettings());
+
+    renderLlmSettingsScreen({ appMode: "oss" });
+
+    await screen.findByTestId("llm-settings-screen");
+    expect(
+      screen.getByTestId("sdk-section-advanced-toggle"),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("sdk-section-all-toggle")).toBeInTheDocument();
+  });
+
+  it("keeps Advanced visible but hides All in SaaS mode for the default LLM route schema", async () => {
+    vi.spyOn(
+      organizationService,
+      "getOrganizationSettings",
+    ).mockResolvedValue(
+      buildSettings({
+        agent_settings: {
+          llm: {
+            model: "openai/gpt-4o",
+          },
+        },
+      }),
+    );
+
+    renderLlmSettingsScreen({ appMode: "saas", scope: "org" });
+
+    await screen.findByTestId("llm-settings-screen");
+    expect(
+      screen.getByTestId("sdk-section-advanced-toggle"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("sdk-section-all-toggle"),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
+
+    expect(screen.getByTestId("llm-settings-form-advanced")).toBeInTheDocument();
     expect(screen.getByTestId("llm-custom-model-input")).toBeInTheDocument();
     expect(screen.getByTestId("base-url-input")).toBeInTheDocument();
   });
@@ -467,7 +517,7 @@ describe("LlmSettingsScreen", () => {
 
     vi.spyOn(
       organizationService,
-      "getOrganizationAgentSettings",
+      "getOrganizationSettings",
     ).mockResolvedValue(
       buildSettings({
         llm_model: "gpt-4",
@@ -667,7 +717,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({ api_key: "test-api-key" }),
           }),
         }),
@@ -758,7 +808,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({
               api_key: "test-api-key",
               base_url: "https://schema.default/v1",
@@ -773,9 +823,7 @@ describe("LlmSettingsScreen", () => {
       string,
       unknown
     >;
-    expect(
-      (payload.agent_settings as Record<string, unknown>) ?? {},
-    ).not.toHaveProperty("agent");
+    expect(getPayloadAgentSettings(payload)).not.toHaveProperty("agent");
   });
 
   it("preserves existing MCP settings when saving the LLM page", async () => {
@@ -842,10 +890,7 @@ describe("LlmSettingsScreen", () => {
     const saveSettingsSpy = vi
       .spyOn(SettingsService, "saveSettings")
       .mockImplementation(async (payload) => {
-        const payloadAgentSettings = (payload.agent_settings ?? {}) as Record<
-          string,
-          unknown
-        >;
+        const payloadAgentSettings = getPayloadAgentSettings(payload);
 
         const nextAgentSettings: NonNullable<Settings["agent_settings"]> = {
           ...(persistedSettings.agent_settings ?? {}),
@@ -884,9 +929,7 @@ describe("LlmSettingsScreen", () => {
       string,
       unknown
     >;
-    expect(
-      (payload.agent_settings as Record<string, unknown>) ?? {},
-    ).not.toHaveProperty("mcp_config");
+    expect(getPayloadAgentSettings(payload)).not.toHaveProperty("mcp_config");
 
     await waitFor(() => {
       expect(getSettingsSpy).toHaveBeenCalledTimes(2);
@@ -919,11 +962,18 @@ describe("LlmSettingsScreen", () => {
           ...persistedSettings.agent_settings,
         } as NonNullable<Settings["agent_settings"]>;
 
-        Object.entries(payload).forEach(([key, value]) => {
-          if (key.includes(".") || key === "agent" || key === "mcp_config") {
-            nextAgentSettings[key] = value as SettingsValue;
-          }
-        });
+        const payloadAgentSettings = getPayloadAgentSettings(payload);
+        Object.assign(
+          nextAgentSettings,
+          payloadAgentSettings as Record<string, SettingsValue>,
+        );
+        nextAgentSettings.llm = {
+          ...((persistedSettings.agent_settings?.llm as Record<
+            string,
+            SettingsValue
+          >) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+        };
 
         persistedSettings = buildSettings({
           ...persistedSettings,
@@ -944,7 +994,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({ api_key: "test-api-key" }),
           }),
         }),
@@ -990,11 +1040,18 @@ describe("LlmSettingsScreen", () => {
           ...persistedSettings.agent_settings,
         } as NonNullable<Settings["agent_settings"]>;
 
-        Object.entries(payload).forEach(([key, value]) => {
-          if (key.includes(".") || key === "agent" || key === "mcp_config") {
-            nextAgentSettings[key] = value as SettingsValue;
-          }
-        });
+        const payloadAgentSettings = getPayloadAgentSettings(payload);
+        Object.assign(
+          nextAgentSettings,
+          payloadAgentSettings as Record<string, SettingsValue>,
+        );
+        nextAgentSettings.llm = {
+          ...((persistedSettings.agent_settings?.llm as Record<
+            string,
+            SettingsValue
+          >) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+        };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
           ...persistedSettings,
@@ -1017,7 +1074,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({ api_key: "test-api-key" }),
           }),
         }),
@@ -1056,16 +1113,23 @@ describe("LlmSettingsScreen", () => {
     });
 
     const getOrganizationSettingsSpy = vi
-      .spyOn(organizationService, "getOrganizationAgentSettings")
+      .spyOn(organizationService, "getOrganizationSettings")
       .mockImplementation(async () => structuredClone(persistedSettings));
     const saveOrganizationSettingsSpy = vi
-      .spyOn(organizationService, "saveOrganizationAgentSettings")
-      .mockImplementation(async (payload) => {
+      .spyOn(organizationService, "saveOrganizationSettings")
+      .mockImplementation(async ({ settings }) => {
         const nextAgentSettings = {
           ...persistedSettings.agent_settings,
         } as NonNullable<Settings["agent_settings"]>;
 
-        Object.entries(payload).forEach(([key, value]) => {
+        const agentSettingsDiff = settings.agent_settings_diff as
+          | Settings["agent_settings"]
+          | undefined;
+        if (agentSettingsDiff) {
+          Object.assign(nextAgentSettings, agentSettingsDiff);
+        }
+
+        Object.entries(settings).forEach(([key, value]) => {
           if (key.includes(".") || key === "agent" || key === "mcp_config") {
             nextAgentSettings[key] = value as SettingsValue;
           }
@@ -1093,21 +1157,22 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveOrganizationSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
-            llm: expect.objectContaining({
-              api_key: "test-api-key",
-              base_url: null,
+          settings: expect.objectContaining({
+            agent_settings_diff: expect.objectContaining({
+              llm: expect.objectContaining({
+                api_key: "test-api-key",
+                base_url: null,
+              }),
             }),
           }),
         }),
       );
     });
 
-    const payload = saveOrganizationSettingsSpy.mock.calls[0]?.at(0) as Record<
-      string,
-      unknown
-    >;
-    expect(payload).not.toHaveProperty("search_api_key");
+    const payload = saveOrganizationSettingsSpy.mock.calls[0]?.at(0) as {
+      settings: Record<string, unknown>;
+    };
+    expect(payload.settings).not.toHaveProperty("search_api_key");
 
     await waitFor(() => {
       expect(getOrganizationSettingsSpy).toHaveBeenCalledTimes(2);
@@ -1141,11 +1206,18 @@ describe("LlmSettingsScreen", () => {
           ...persistedSettings.agent_settings,
         } as NonNullable<Settings["agent_settings"]>;
 
-        Object.entries(payload).forEach(([key, value]) => {
-          if (key.includes(".") || key === "agent" || key === "mcp_config") {
-            nextAgentSettings[key] = value as SettingsValue;
-          }
-        });
+        const payloadAgentSettings = getPayloadAgentSettings(payload);
+        Object.assign(
+          nextAgentSettings,
+          payloadAgentSettings as Record<string, SettingsValue>,
+        );
+        nextAgentSettings.llm = {
+          ...((persistedSettings.agent_settings?.llm as Record<
+            string,
+            SettingsValue
+          >) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+        };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
           ...persistedSettings,
@@ -1167,7 +1239,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({
               api_key: "test-api-key",
               base_url: null,
@@ -1202,11 +1274,18 @@ describe("LlmSettingsScreen", () => {
           ...persistedSettings.agent_settings,
         } as NonNullable<Settings["agent_settings"]>;
 
-        Object.entries(payload).forEach(([key, value]) => {
-          if (key.includes(".") || key === "agent" || key === "mcp_config") {
-            nextAgentSettings[key] = value as SettingsValue;
-          }
-        });
+        const payloadAgentSettings = getPayloadAgentSettings(payload);
+        Object.assign(
+          nextAgentSettings,
+          payloadAgentSettings as Record<string, SettingsValue>,
+        );
+        nextAgentSettings.llm = {
+          ...((persistedSettings.agent_settings?.llm as Record<
+            string,
+            SettingsValue
+          >) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+        };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
           ...persistedSettings,
@@ -1237,7 +1316,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({
               model: "openai/gpt-4o",
               api_key: "test-api-key",
@@ -1481,7 +1560,7 @@ describe("LlmSettingsScreen", () => {
     await waitFor(() => {
       expect(saveSettingsSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          agent_settings: expect.objectContaining({
+          agent_settings_diff: expect.objectContaining({
             llm: expect.objectContaining({
               base_url: "https://custom.example/v1/extra",
             }),
@@ -2003,14 +2082,14 @@ describe("LlmSettingsScreen", () => {
       // Org defaults reuse this screen with scope="org". Profiles are a
       // per-user feature, so touching the profiles endpoints here would
       // incorrectly spawn profiles on the signed-in user's settings.
-      vi.spyOn(organizationService, "getOrganizationAgentSettings").mockResolvedValue(
+      vi.spyOn(organizationService, "getOrganizationSettings").mockResolvedValue(
         buildSettings({
           agent_settings: { llm: { model: "openai/gpt-4o" } },
         }),
       );
       vi.spyOn(
         organizationService,
-        "saveOrganizationAgentSettings",
+        "saveOrganizationSettings",
       ).mockResolvedValue({
         agent_settings: {},
         conversation_settings: {},
@@ -2032,7 +2111,7 @@ describe("LlmSettingsScreen", () => {
       await userEvent.click(screen.getByTestId("save-button"));
 
       await waitFor(() => {
-        expect(organizationService.saveOrganizationAgentSettings).toHaveBeenCalled();
+        expect(organizationService.saveOrganizationSettings).toHaveBeenCalled();
       });
       expect(ProfilesService.saveProfile).not.toHaveBeenCalled();
       expect(ProfilesService.activateProfile).not.toHaveBeenCalled();

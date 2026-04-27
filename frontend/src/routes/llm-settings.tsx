@@ -169,12 +169,6 @@ export function LlmSettingsScreen({
   }, [settings?.llm_model]);
 
   React.useEffect(() => {
-    if (settings && isSaasMode && scope !== "org") {
-      hasHydratedInitialPersonalSaasViewRef.current = true;
-    }
-  }, [isSaasMode, scope, settings]);
-
-  React.useEffect(() => {
     const checkout = searchParams.get("checkout");
 
     if (checkout === "success") {
@@ -420,7 +414,7 @@ export function LlmSettingsScreen({
       // same-value re-saves (e.g. save → delete profile → save again).
       lastSavedModelRef.current = modelValue || null;
 
-      return { agent_settings: agentSettings };
+      return { agent_settings_diff: agentSettings };
     },
     [isSaasMode, schema, selectedProvider],
   );
@@ -492,6 +486,8 @@ export function LlmSettingsScreen({
       onSaveSuccess={handleSaveSuccess}
       getInitialView={getInitialView}
       trailingActions={profilesButton}
+      forceShowAdvancedView
+      allowAllView={!isSaasMode}
       testId="llm-settings-screen"
     />
   );
