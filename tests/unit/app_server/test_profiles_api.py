@@ -477,6 +477,119 @@ async def test_activate_profile_applies_base_url_fixup(test_client, settings_sto
     assert stored.agent_settings.llm.base_url is not None
 
 
+# ── POST /profiles/{name}/rename ─────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_renames_and_preserves_api_key(
+    test_client, settings_store
+):
+    settings = _base_settings()
+    settings.llm_profiles.save(
+        'old',
+        LLM(model='openai/gpt-4o', api_key=SecretStr('sk-keep')),
+    )
+    await _seed(settings_store, settings)
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/old/rename',
+        json={'new_name': 'new'},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body['name'] == 'new'
+
+    stored = await settings_store.load()
+    assert stored.llm_profiles.get('old') is None
+    renamed = stored.llm_profiles.get('new')
+    assert renamed is not None
+    assert renamed.api_key.get_secret_value() == 'sk-keep'
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_preserves_active_flag(test_client, settings_store):
+    settings = _base_settings()
+    settings.llm_profiles.save('p', LLM(model='openai/gpt-4o'))
+    settings.llm_profiles.active = 'p'
+    await _seed(settings_store, settings)
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/p/rename',
+        json={'new_name': 'q'},
+    )
+    assert response.status_code == 200
+
+    stored = await settings_store.load()
+    assert stored.llm_profiles.active == 'q'
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_returns_404_when_unknown(test_client, settings_store):
+    await _seed(settings_store, _base_settings())
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/ghost/rename',
+        json={'new_name': 'new'},
+    )
+
+    assert response.status_code == 404
+    assert "'ghost'" in response.json()['detail']
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_returns_409_when_target_exists(
+    test_client, settings_store
+):
+    settings = _base_settings()
+    settings.llm_profiles.save('a', LLM(model='openai/gpt-4o'))
+    settings.llm_profiles.save('b', LLM(model='anthropic/claude-opus-4'))
+    await _seed(settings_store, settings)
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/a/rename',
+        json={'new_name': 'b'},
+    )
+
+    assert response.status_code == 409
+    assert "'b'" in response.json()['detail']
+
+    # Both originals should be intact after the failed rename.
+    stored = await settings_store.load()
+    assert stored.llm_profiles.has('a')
+    assert stored.llm_profiles.has('b')
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_to_same_name_is_noop(test_client, settings_store):
+    settings = _base_settings()
+    settings.llm_profiles.save('p', LLM(model='openai/gpt-4o'))
+    await _seed(settings_store, settings)
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/p/rename',
+        json={'new_name': 'p'},
+    )
+
+    assert response.status_code == 200
+    stored = await settings_store.load()
+    assert stored.llm_profiles.has('p')
+
+
+@pytest.mark.asyncio
+async def test_rename_profile_rejects_invalid_new_name(test_client, settings_store):
+    settings = _base_settings()
+    settings.llm_profiles.save('p', LLM(model='openai/gpt-4o'))
+    await _seed(settings_store, settings)
+
+    response = test_client.post(
+        '/api/v1/settings/profiles/p/rename',
+        json={'new_name': 'has space'},
+    )
+
+    assert response.status_code == 422
+
+
 # ── Name validation ──────────────────────────────────────────────
 
 
@@ -615,7 +728,7 @@ async def test_journey_direct_llm_edit_clears_active(test_client, settings_store
 
     test_client.post(
         '/api/v1/settings',
-        json={'agent_settings': {'llm': {'model': 'anthropic/claude-opus-4'}}},
+        json={'agent_settings_diff': {'llm': {'model': 'anthropic/claude-opus-4'}}},
     )
 
     assert test_client.get('/api/v1/settings/profiles').json()['active_profile'] is None

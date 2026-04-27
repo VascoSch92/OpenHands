@@ -11,6 +11,7 @@ from openhands.sdk.llm import LLM
 from openhands.storage.data_models.llm_profiles import (
     MAX_PROFILES_PER_USER,
     LLMProfiles,
+    ProfileAlreadyExistsError,
     ProfileLimitExceededError,
     ProfileNotFoundError,
     StrictLLM,
@@ -142,6 +143,84 @@ def test_delete_leaves_active_alone_when_other_removed():
     profiles.delete('p2')
 
     assert profiles.active == 'p1'
+
+
+# ── Rename ────────────────────────────────────────────────────────
+
+
+def test_rename_preserves_llm_config():
+    profiles = LLMProfiles()
+    profiles.save('old', _make_llm(model='openai/gpt-4o', api_key='secret'))
+
+    profiles.rename('old', 'new')
+
+    assert profiles.get('old') is None
+    renamed = profiles.get('new')
+    assert renamed is not None
+    assert renamed.model == 'openai/gpt-4o'
+    assert renamed.api_key.get_secret_value() == 'secret'
+
+
+def test_rename_preserves_active_flag_when_renamed_was_active():
+    profiles = LLMProfiles()
+    profiles.save('p', _make_llm())
+    profiles.active = 'p'
+
+    profiles.rename('p', 'q')
+
+    assert profiles.active == 'q'
+
+
+def test_rename_leaves_active_alone_when_renaming_other():
+    profiles = LLMProfiles()
+    profiles.save('p1', _make_llm())
+    profiles.save('p2', _make_llm())
+    profiles.active = 'p1'
+
+    profiles.rename('p2', 'p2-renamed')
+
+    assert profiles.active == 'p1'
+
+
+def test_rename_to_same_name_is_noop():
+    profiles = LLMProfiles()
+    profiles.save('p', _make_llm())
+    profiles.active = 'p'
+
+    profiles.rename('p', 'p')
+
+    assert profiles.has('p')
+    assert profiles.active == 'p'
+
+
+def test_rename_unknown_raises_profile_not_found():
+    profiles = LLMProfiles()
+    with pytest.raises(ProfileNotFoundError, match='ghost'):
+        profiles.rename('ghost', 'new')
+
+
+def test_rename_to_existing_name_raises():
+    profiles = LLMProfiles()
+    profiles.save('a', _make_llm())
+    profiles.save('b', _make_llm())
+
+    with pytest.raises(ProfileAlreadyExistsError, match='b'):
+        profiles.rename('a', 'b')
+
+    # Original entries untouched.
+    assert profiles.has('a')
+    assert profiles.has('b')
+
+
+def test_rename_preserves_insertion_order():
+    profiles = LLMProfiles()
+    profiles.save('a', _make_llm())
+    profiles.save('b', _make_llm())
+    profiles.save('c', _make_llm())
+
+    profiles.rename('b', 'B')
+
+    assert list(profiles.profiles.keys()) == ['a', 'B', 'c']
 
 
 # ── Serialization ─────────────────────────────────────────────────
