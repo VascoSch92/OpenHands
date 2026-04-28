@@ -14,7 +14,12 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from openhands.app_server.secrets.secrets_models import Secrets
+from openhands.app_server.secrets.secrets_store import SecretsStore
+from openhands.app_server.settings.file_settings_store import FileSettingsStore
+from openhands.app_server.settings.settings_models import Settings
 from openhands.app_server.settings.settings_router import _user_profile_locks
+from openhands.app_server.settings.settings_store import SettingsStore
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.integrations.service_types import UserGitInfo
 from openhands.sdk.llm import LLM
@@ -22,12 +27,7 @@ from openhands.sdk.settings import AgentSettings
 from openhands.server.app import app
 from openhands.server.user_auth.user_auth import UserAuth
 from openhands.storage.data_models.llm_profiles import MAX_PROFILES_PER_USER
-from openhands.storage.data_models.secrets import Secrets
-from openhands.storage.data_models.settings import Settings
 from openhands.storage.memory import InMemoryFileStore
-from openhands.storage.secrets.secrets_store import SecretsStore
-from openhands.storage.settings.file_settings_store import FileSettingsStore
-from openhands.storage.settings.settings_store import SettingsStore
 
 
 @pytest.fixture(autouse=True)

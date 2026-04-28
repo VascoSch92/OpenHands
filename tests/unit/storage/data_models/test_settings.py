@@ -441,7 +441,9 @@ def test_update_clears_active_when_llm_diverges():
     settings.switch_to_profile('p')
     assert settings.llm_profiles.active == 'p'
 
-    settings.update({'agent_settings_diff': {'llm': {'model': 'anthropic/claude-opus-4'}}})
+    settings.update(
+        {'agent_settings_diff': {'llm': {'model': 'anthropic/claude-opus-4'}}}
+    )
 
     assert settings.llm_profiles.active is None
 
