@@ -883,3 +883,75 @@ async def test_load_with_null_llm_profiles_column_uses_default_factory(
     assert loaded is not None
     assert loaded.llm_profiles.profiles == {}
     assert loaded.llm_profiles.active is None
+
+
+@pytest.mark.asyncio
+async def test_llm_profiles_are_encrypted_at_rest(
+    async_session_maker, mock_config, org_with_multiple_members_fixture
+):
+    """The raw value in the user.llm_profiles column must be ciphertext, not
+    a JSON dict — profile api_keys would otherwise leak in DB dumps,
+    replicas, and backups. Mirrors the encryption invariant org and
+    org_member already enforce on _llm_api_key."""
+    from openhands.sdk.llm import LLM
+    from sqlalchemy import select, text
+    from storage.user import User
+
+    fixture = org_with_multiple_members_fixture
+    admin_user_id = fixture['admin_user_id']
+    admin_store = SaasSettingsStore(str(admin_user_id), mock_config)
+
+    settings = DataSettings()
+    settings.update(
+        {
+            'agent_settings_diff': {
+                'llm': {
+                    'model': 'anthropic/claude-sonnet-4-5-20250929',
+                    'base_url': 'https://api.anthropic.com/v1',
+                    'api_key': 'active-key',
+                },
+            },
+        }
+    )
+    settings.llm_profiles.save(
+        'work',
+        LLM(
+            model='anthropic/claude-sonnet-4-5-20250929',
+            base_url='https://api.anthropic.com/v1',
+            api_key=SecretStr('super-secret-byok'),
+        ),
+    )
+    with patch('storage.saas_settings_store.a_session_maker', async_session_maker):
+        await admin_store.store(settings)
+
+    async with async_session_maker() as session:
+        # Bypass the ORM-level TypeDecorator by reading the raw cell.
+        # SQLite stores UUIDs hyphen-stripped, so normalize both sides.
+        rows = (
+            await session.execute(text('SELECT id, llm_profiles FROM "user"'))
+        ).all()
+    raw = next(
+        (
+            r[1]
+            for r in rows
+            if str(r[0]).replace('-', '') == admin_user_id.hex
+        ),
+        None,
+    )
+    assert raw is not None
+    # The plaintext secret must not appear anywhere in the at-rest payload.
+    assert 'super-secret-byok' not in raw
+    # And the raw payload must not be parseable as JSON — i.e. it's
+    # encrypted, not a serialized profiles dict.
+    import json as _json
+
+    with pytest.raises(_json.JSONDecodeError):
+        _json.loads(raw)
+
+    # Sanity: ORM read still decrypts correctly.
+    async with async_session_maker() as session:
+        user = (
+            await session.execute(select(User).where(User.id == admin_user_id))
+        ).scalar_one()
+    assert user.llm_profiles is not None
+    assert user.llm_profiles['profiles']['work']['api_key'] == 'super-secret-byok'

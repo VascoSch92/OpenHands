@@ -299,6 +299,59 @@ async def test_save_profile_overwrites_existing(test_client, settings_store):
 
 
 @pytest.mark.asyncio
+async def test_save_overwrite_of_active_profile_clears_active(
+    test_client, settings_store
+):
+    """Overwriting the currently-active profile must drop ``active`` —
+    otherwise the UI claims profile X is in use while ``agent_settings.llm``
+    still points at the *old* X. Mirrors the safety net the main settings
+    POST already enforces via ``reconcile_active_profile``.
+    """
+    settings = _base_settings()
+    settings.llm_profiles.save('p', LLM(model='openai/gpt-4o'))
+    settings.switch_to_profile('p')  # makes 'p' active *and* the running llm
+    await _seed(settings_store, settings)
+    assert test_client.get('/api/v1/settings/profiles').json()['active_profile'] == 'p'
+
+    # Save a different config under the same name.
+    response = test_client.post(
+        '/api/v1/settings/profiles/p',
+        json={'llm': {'model': 'anthropic/claude-opus-4'}},
+    )
+    assert response.status_code == 201
+
+    body = test_client.get('/api/v1/settings/profiles').json()
+    assert body['active_profile'] is None
+    # The saved profile reflects the new config; the active marker is gone
+    # because agent_settings.llm still runs the previous one.
+    stored = await settings_store.load()
+    assert stored.llm_profiles.get('p').model == 'anthropic/claude-opus-4'
+    assert stored.agent_settings.llm.model == 'openai/gpt-4o'
+
+
+@pytest.mark.asyncio
+async def test_save_overwrite_of_inactive_profile_preserves_active(
+    test_client, settings_store
+):
+    """Overwriting a non-active profile must NOT touch the active marker —
+    only the active profile can diverge from agent_settings.llm.
+    """
+    settings = _base_settings()
+    settings.llm_profiles.save('active', LLM(model='openai/gpt-4o'))
+    settings.llm_profiles.save('other', LLM(model='openai/gpt-4o'))
+    settings.switch_to_profile('active')
+    await _seed(settings_store, settings)
+
+    test_client.post(
+        '/api/v1/settings/profiles/other',
+        json={'llm': {'model': 'anthropic/claude-opus-4'}},
+    )
+
+    body = test_client.get('/api/v1/settings/profiles').json()
+    assert body['active_profile'] == 'active'
+
+
+@pytest.mark.asyncio
 async def test_save_profile_rejects_invalid_llm_with_422(test_client, settings_store):
     await _seed(settings_store, _base_settings())
 

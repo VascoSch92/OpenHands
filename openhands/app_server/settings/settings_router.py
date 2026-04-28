@@ -504,6 +504,9 @@ async def save_profile(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT, detail=str(exc)
             ) from exc
+        # Without this, overwriting the active profile leaves
+        # agent_settings.llm stale — active would lie about what's running.
+        settings.reconcile_active_profile()
         await settings_store.store(settings)
 
     return ProfileMutationResponse(name=name, message=f"Profile '{name}' saved")

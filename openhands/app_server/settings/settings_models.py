@@ -175,7 +175,7 @@ class Settings(BaseModel):
 
     # ── Batch update ────────────────────────────────────────────────
 
-    def _reconcile_active_profile(self) -> None:
+    def reconcile_active_profile(self) -> None:
         """Clear ``llm_profiles.active`` when the current LLM diverges from it.
 
         The active profile is a pointer into ``llm_profiles.profiles``; if the
@@ -263,7 +263,7 @@ class Settings(BaseModel):
                         value = SecretStr(value) if value else None
                 setattr(self, key, value)
 
-        self._reconcile_active_profile()
+        self.reconcile_active_profile()
 
     # ── Serialization ───────────────────────────────────────────────
 

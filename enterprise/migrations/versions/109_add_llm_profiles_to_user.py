@@ -6,6 +6,11 @@ dump onto the User/Org rows. Without a column here the field is silently
 dropped on store() and always defaults to empty on load(), so saved
 profiles disappear after any settings update or page refresh.
 
+The column is plain ``String`` because the ORM-level ``EncryptedJSON``
+TypeDecorator stores JSON-serialized profiles as a JWE-encrypted string —
+profiles can carry per-profile ``api_key`` values, so the at-rest
+representation must match the existing org/member encrypted-secret pattern.
+
 Revision ID: 109
 Revises: 108
 Create Date: 2026-04-28
@@ -24,7 +29,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('user', sa.Column('llm_profiles', sa.JSON(), nullable=True))
+    op.add_column('user', sa.Column('llm_profiles', sa.String(), nullable=True))
 
 
 def downgrade() -> None:
