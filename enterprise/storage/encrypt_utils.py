@@ -8,6 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from pydantic import SecretStr
 from server.config import get_config
 from sqlalchemy import String, TypeDecorator
+from sqlalchemy.engine.interfaces import Dialect
 
 _jwt_service = None
 _fernet = None
@@ -140,7 +141,7 @@ def model_to_kwargs(model_instance):
     }
 
 
-class EncryptedJSON(TypeDecorator):
+class EncryptedJSON(TypeDecorator[dict[str, Any]]):
     """JSON column whose serialized payload is encrypted at rest.
 
     Use for JSON dicts that may contain secrets (e.g. nested ``api_key``
@@ -153,12 +154,16 @@ class EncryptedJSON(TypeDecorator):
     impl = String
     cache_ok = True
 
-    def process_bind_param(self, value: Any, dialect):
+    def process_bind_param(
+        self, value: dict[str, Any] | None, dialect: Dialect
+    ) -> str | None:
         if value is None:
             return None
         return encrypt_value(json.dumps(value))
 
-    def process_result_value(self, value: Any, dialect):
+    def process_result_value(
+        self, value: str | None, dialect: Dialect
+    ) -> dict[str, Any] | None:
         if value is None:
             return None
         return json.loads(decrypt_value(value))

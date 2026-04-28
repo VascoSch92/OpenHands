@@ -3,7 +3,7 @@ SQLAlchemy model for User.
 """
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from sqlalchemy import DateTime, ForeignKey, String
@@ -37,7 +37,9 @@ class User(Base):
     git_user_email: Mapped[str | None] = mapped_column(String, nullable=True)
     sandbox_grouping_strategy: Mapped[str | None] = mapped_column(String, nullable=True)
     disabled_skills: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
-    llm_profiles: Mapped[dict | None] = mapped_column(EncryptedJSON, nullable=True)
+    llm_profiles: Mapped[dict[str, Any] | None] = mapped_column(
+        EncryptedJSON, nullable=True
+    )
     onboarding_completed: Mapped[bool | None] = mapped_column(
         nullable=True, default=False
     )
