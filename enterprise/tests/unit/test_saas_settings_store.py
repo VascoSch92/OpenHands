@@ -893,9 +893,10 @@ async def test_llm_profiles_are_encrypted_at_rest(
     a JSON dict — profile api_keys would otherwise leak in DB dumps,
     replicas, and backups. Mirrors the encryption invariant org and
     org_member already enforce on _llm_api_key."""
-    from openhands.sdk.llm import LLM
     from sqlalchemy import select, text
     from storage.user import User
+
+    from openhands.sdk.llm import LLM
 
     fixture = org_with_multiple_members_fixture
     admin_user_id = fixture['admin_user_id']
@@ -931,11 +932,7 @@ async def test_llm_profiles_are_encrypted_at_rest(
             await session.execute(text('SELECT id, llm_profiles FROM "user"'))
         ).all()
     raw = next(
-        (
-            r[1]
-            for r in rows
-            if str(r[0]).replace('-', '') == admin_user_id.hex
-        ),
+        (r[1] for r in rows if str(r[0]).replace('-', '') == admin_user_id.hex),
         None,
     )
     assert raw is not None
