@@ -420,28 +420,29 @@ export function LlmSettingsScreen({
   );
 
   const handleSaveSuccess = React.useCallback(async () => {
+    const savedModel = lastSavedModelRef.current;
+    const name = savedModel ? deriveProfileNameFromModel(savedModel) : null;
+
     // Auto-saved profiles are a personal-scope feature — organization default
     // LLM settings reuse this screen but shouldn't spawn per-user profiles.
-    if (scope === "org") return;
-
-    const savedModel = lastSavedModelRef.current;
-    if (!savedModel) return;
-    const name = deriveProfileNameFromModel(savedModel);
-    if (!name) return;
-
-    try {
-      // Omit `llm` → backend snapshots the just-saved agent_settings.llm
-      // (api_key and all). Saves us from having to hand-reconstruct the
-      // config and risk mangling the secret placeholder handling.
-      await saveProfile.mutateAsync({
-        name,
-        request: { include_secrets: true },
-      });
-      await activateProfile.mutateAsync(name);
-    } catch {
-      // Best-effort: the settings save already succeeded. Profile cap
-      // (HTTP 409) and transient errors are surfaced on the Profiles page.
+    if (scope !== "org" && name) {
+      try {
+        // Omit `llm` → backend snapshots the just-saved agent_settings.llm
+        // (api_key and all). Saves us from having to hand-reconstruct the
+        // config and risk mangling the secret placeholder handling.
+        await saveProfile.mutateAsync({
+          name,
+          request: { include_secrets: true },
+        });
+        await activateProfile.mutateAsync(name);
+      } catch {
+        // Best-effort: the settings save already succeeded. Profile cap
+        // (HTTP 409) and transient errors are surfaced on the Profiles page.
+      }
     }
+
+    setInitialViewHint(null);
+    setShowProfiles(true);
   }, [activateProfile, saveProfile, scope]);
 
   // A "Profiles" button in the form-view control strip returns the user to

@@ -14,6 +14,7 @@ import { useActivateLlmProfile } from "#/hooks/mutation/use-activate-llm-profile
 import { useRenameLlmProfile } from "#/hooks/mutation/use-rename-llm-profile";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { mutateWithToast } from "#/utils/mutate-with-toast";
+import { extractErrorMessage } from "#/utils/extract-error-message";
 import { I18nKey } from "#/i18n/declaration";
 import SettingsGearIcon from "#/icons/settings-gear.svg?react";
 import EditIcon from "#/icons/u-edit.svg?react";
@@ -23,21 +24,6 @@ import ThreeDotsVerticalIcon from "#/icons/three-dots-vertical.svg?react";
 
 // Mirrors the backend regex ^[A-Za-z0-9._-]{1,64}$ in settings_router.py.
 const PROFILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
-
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (typeof err === "object" && err !== null) {
-    const withResponse = err as {
-      response?: { data?: { detail?: unknown; message?: unknown } };
-      message?: string;
-    };
-    const detail = withResponse.response?.data?.detail;
-    if (typeof detail === "string") return detail;
-    const message = withResponse.response?.data?.message;
-    if (typeof message === "string") return message;
-    if (withResponse.message) return withResponse.message;
-  }
-  return fallback;
-}
 
 interface RenameProfileModalProps {
   profile: LlmProfileSummary | null;
@@ -199,6 +185,17 @@ interface ProfileActionsMenuProps {
   onClose: () => void;
 }
 
+type MenuIcon = React.ComponentType<{ width: number; height: number }>;
+
+interface MenuItemSpec {
+  testId: string;
+  icon: MenuIcon;
+  label: string;
+  onSelect: () => void;
+  isDisabled?: boolean;
+  isDestructive?: boolean;
+}
+
 function ProfileActionsMenu({
   onEdit,
   onRename,
@@ -211,6 +208,35 @@ function ProfileActionsMenu({
   const { t } = useTranslation();
   const ref = useClickOutsideElement<HTMLUListElement>(onClose);
 
+  const items: MenuItemSpec[] = [
+    {
+      testId: "profile-edit",
+      icon: SettingsGearIcon,
+      label: t(I18nKey.SETTINGS$PROFILE_EDIT),
+      onSelect: onEdit,
+    },
+    {
+      testId: "profile-rename",
+      icon: EditIcon,
+      label: t(I18nKey.BUTTON$RENAME),
+      onSelect: onRename,
+    },
+    {
+      testId: "profile-set-active",
+      icon: CheckmarkIcon,
+      label: t(I18nKey.SETTINGS$PROFILE_SET_ACTIVE),
+      onSelect: onSetActive,
+      isDisabled: isActive || isActivating,
+    },
+    {
+      testId: "profile-delete",
+      icon: DeleteIcon,
+      label: t(I18nKey.BUTTON$DELETE),
+      onSelect: onDelete,
+      isDestructive: true,
+    },
+  ];
+
   return (
     <ContextMenu
       ref={ref}
@@ -219,55 +245,33 @@ function ProfileActionsMenu({
       position="bottom"
       className="min-w-[180px]"
     >
-      <ContextMenuListItem
-        testId="profile-edit"
-        onClick={() => {
-          onEdit();
-          onClose();
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <SettingsGearIcon width={16} height={16} />
-          <span>{t(I18nKey.SETTINGS$PROFILE_EDIT)}</span>
-        </div>
-      </ContextMenuListItem>
-      <ContextMenuListItem
-        testId="profile-rename"
-        onClick={() => {
-          onRename();
-          onClose();
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <EditIcon width={16} height={16} />
-          <span>{t(I18nKey.BUTTON$RENAME)}</span>
-        </div>
-      </ContextMenuListItem>
-      <ContextMenuListItem
-        testId="profile-set-active"
-        onClick={() => {
-          onSetActive();
-          onClose();
-        }}
-        isDisabled={isActive || isActivating}
-      >
-        <div className="flex items-center gap-2">
-          <CheckmarkIcon width={16} height={16} />
-          <span>{t(I18nKey.SETTINGS$PROFILE_SET_ACTIVE)}</span>
-        </div>
-      </ContextMenuListItem>
-      <ContextMenuListItem
-        testId="profile-delete"
-        onClick={() => {
-          onDelete();
-          onClose();
-        }}
-      >
-        <div className="flex items-center gap-2 text-red-400">
-          <DeleteIcon width={16} height={16} />
-          <span>{t(I18nKey.BUTTON$DELETE)}</span>
-        </div>
-      </ContextMenuListItem>
+      {items.map(
+        ({
+          testId,
+          icon: Icon,
+          label,
+          onSelect,
+          isDisabled,
+          isDestructive,
+        }) => (
+          <ContextMenuListItem
+            key={testId}
+            testId={testId}
+            onClick={() => {
+              onSelect();
+              onClose();
+            }}
+            isDisabled={isDisabled}
+          >
+            <div
+              className={`flex items-center gap-2${isDestructive ? " text-red-400" : ""}`}
+            >
+              <Icon width={16} height={16} />
+              <span>{label}</span>
+            </div>
+          </ContextMenuListItem>
+        ),
+      )}
     </ContextMenu>
   );
 }
@@ -439,10 +443,7 @@ export function LlmProfilesManager({
 
   const handleEdit = async (profile: LlmProfileSummary) => {
     if (profile.name !== active) {
-      await mutateWithToast(activateProfile, profile.name, {
-        success: t(I18nKey.SETTINGS$PROFILE_ACTIVATED, { name: profile.name }),
-        error: (err) => extractErrorMessage(err, t(I18nKey.ERROR$GENERIC)),
-      }).catch(() => null);
+      await handleActivate(profile.name);
     }
     onEditProfile?.(profile);
   };
