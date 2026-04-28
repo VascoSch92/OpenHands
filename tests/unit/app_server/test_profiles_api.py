@@ -7,6 +7,7 @@ Covers every endpoint under ``/api/v1/settings/profiles``:
 
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -14,7 +15,12 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
+from openhands.app_server.secrets.secrets_models import Secrets
+from openhands.app_server.secrets.secrets_store import SecretsStore
+from openhands.app_server.settings.file_settings_store import FileSettingsStore
+from openhands.app_server.settings.settings_models import Settings
 from openhands.app_server.settings.settings_router import _user_profile_locks
+from openhands.app_server.settings.settings_store import SettingsStore
 from openhands.integrations.provider import ProviderToken, ProviderType
 from openhands.integrations.service_types import UserGitInfo
 from openhands.sdk.llm import LLM
@@ -22,12 +28,6 @@ from openhands.sdk.settings import AgentSettings
 from openhands.server.app import app
 from openhands.server.user_auth.user_auth import UserAuth
 from openhands.storage.data_models.llm_profiles import MAX_PROFILES_PER_USER
-from openhands.storage.data_models.secrets import Secrets
-from openhands.storage.data_models.settings import Settings
-from openhands.storage.memory import InMemoryFileStore
-from openhands.storage.secrets.secrets_store import SecretsStore
-from openhands.storage.settings.file_settings_store import FileSettingsStore
-from openhands.storage.settings.settings_store import SettingsStore
 
 
 @pytest.fixture(autouse=True)
@@ -84,8 +84,8 @@ class _MockUserAuth(UserAuth):
 
 
 @pytest.fixture
-def settings_store() -> FileSettingsStore:
-    return FileSettingsStore(InMemoryFileStore())
+def settings_store(tmp_path: Path) -> FileSettingsStore:
+    return FileSettingsStore(root_dir=tmp_path)
 
 
 @pytest.fixture
@@ -104,7 +104,7 @@ def test_client(settings_store):
             return_value=auth,
         ),
         patch(
-            'openhands.storage.settings.file_settings_store.FileSettingsStore.get_instance',
+            'openhands.app_server.settings.file_settings_store.FileSettingsStore.get_instance',
             AsyncMock(return_value=settings_store),
         ),
     ):
@@ -152,7 +152,7 @@ def _client_for_user(user_id: str, store: FileSettingsStore):
             return_value=auth,
         ),
         patch(
-            'openhands.storage.settings.file_settings_store.FileSettingsStore.get_instance',
+            'openhands.app_server.settings.file_settings_store.FileSettingsStore.get_instance',
             AsyncMock(return_value=store),
         ),
     ):
@@ -826,7 +826,7 @@ async def test_switching_between_profiles_updates_active_and_model(
 
 
 @pytest.mark.asyncio
-async def test_profiles_are_isolated_between_users():
+async def test_profiles_are_isolated_between_users(tmp_path_factory):
     """Scenario 7 — One user's profiles don't appear in another user's response.
 
     Alice saves a profile against her store; Bob lists profiles against
@@ -835,8 +835,8 @@ async def test_profiles_are_isolated_between_users():
     don't key on user_id, or settings stores that accidentally share
     data).
     """
-    store_a = FileSettingsStore(InMemoryFileStore())
-    store_b = FileSettingsStore(InMemoryFileStore())
+    store_a = FileSettingsStore(root_dir=tmp_path_factory.mktemp('alice'))
+    store_b = FileSettingsStore(root_dir=tmp_path_factory.mktemp('bob'))
     await store_a.store(_base_settings())
     await store_b.store(_base_settings())
 
@@ -891,7 +891,7 @@ async def test_cap_frees_after_delete(test_client, settings_store):
 
 
 @pytest.mark.asyncio
-async def test_concurrent_writes_all_persist():
+async def test_concurrent_writes_all_persist(tmp_path: Path):
     """Drive the handler under a single event loop with N truly concurrent
     coroutines. Each handler loads → mutates → stores under the per-user
     lock; all N profiles must land without any getting clobbered.
@@ -905,7 +905,7 @@ async def test_concurrent_writes_all_persist():
         save_profile,
     )
 
-    store = FileSettingsStore(InMemoryFileStore())
+    store = FileSettingsStore(root_dir=tmp_path)
     await store.store(_base_settings())
 
     async def _save_one(i: int) -> None:
