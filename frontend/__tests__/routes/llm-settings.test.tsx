@@ -2162,6 +2162,98 @@ describe("LlmSettingsScreen", () => {
       expect(ProfilesService.activateProfile).not.toHaveBeenCalled();
     });
 
+    it("uses the user-typed profile name instead of the model-derived default", async () => {
+      vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+        buildSettings({
+          llm_model: "openai/gpt-4o",
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+      vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
+
+      await renderLlmSettingsScreen({ appMode: "oss" });
+
+      await userEvent.type(
+        await screen.findByTestId("llm-profile-name-input"),
+        "my-custom-name",
+      );
+      await userEvent.type(
+        await screen.findByTestId("llm-api-key-input"),
+        "test-api-key",
+      );
+      await userEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(ProfilesService.saveProfile).toHaveBeenCalledWith(
+          "my-custom-name",
+          { include_secrets: true },
+        );
+      });
+      await waitFor(() => {
+        expect(ProfilesService.activateProfile).toHaveBeenCalledWith(
+          "my-custom-name",
+        );
+      });
+    });
+
+    it("falls back to the derived name when the user-typed name fails the regex", async () => {
+      // "has space" is invalid (PROFILE_NAME_PATTERN forbids whitespace).
+      // The helper text turns red but save proceeds with the derived name —
+      // we don't want a settings save to silently succeed while the profile
+      // step blows up server-side with a 422.
+      vi.spyOn(SettingsService, "getSettings").mockResolvedValue(
+        buildSettings({
+          llm_model: "openai/gpt-4o",
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+      vi.spyOn(SettingsService, "saveSettings").mockResolvedValue(true);
+
+      await renderLlmSettingsScreen({ appMode: "oss" });
+
+      await userEvent.type(
+        await screen.findByTestId("llm-profile-name-input"),
+        "has space",
+      );
+      await userEvent.type(
+        await screen.findByTestId("llm-api-key-input"),
+        "test-api-key",
+      );
+      await userEvent.click(screen.getByTestId("save-button"));
+
+      await waitFor(() => {
+        expect(ProfilesService.saveProfile).toHaveBeenCalledWith(
+          "openai_gpt-4o",
+          { include_secrets: true },
+        );
+      });
+    });
+
+    it("does not render the profile-name input on the org-default settings screen", async () => {
+      vi.spyOn(
+        organizationService,
+        "getOrganizationSettings",
+      ).mockResolvedValue(
+        buildSettings({
+          agent_settings: { llm: { model: "openai/gpt-4o" } },
+        }),
+      );
+
+      await renderLlmSettingsScreen({
+        appMode: "saas",
+        scope: "org",
+        organizationId: "3",
+        meData: buildOrganizationMember({ org_id: "3", role: "admin" }),
+      });
+
+      // Wait for the form to render (org-defaults takes the same screen
+      // but should never offer to name a profile).
+      await screen.findByTestId("llm-api-key-input");
+      expect(
+        screen.queryByTestId("llm-profile-name-input"),
+      ).not.toBeInTheDocument();
+    });
+
     it("swallows profile-save failures so the user still sees the settings-saved toast", async () => {
       // If the profiles endpoint is down (e.g. hit the MAX_PROFILES_PER_USER
       // cap), the settings save itself must still be treated as succeeded.

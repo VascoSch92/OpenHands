@@ -2,6 +2,8 @@
 // Matches settings_router.py — keep them in sync.
 const ALLOWED_CHARS = /[^A-Za-z0-9._-]/g;
 
+export const PROFILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+
 /**
  * Build a profile name from an LLM model string.
  *

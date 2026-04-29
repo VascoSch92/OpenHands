@@ -29,8 +29,12 @@ import {
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { useSaveLlmProfile } from "#/hooks/mutation/use-save-llm-profile";
 import { useActivateLlmProfile } from "#/hooks/mutation/use-activate-llm-profile";
-import { deriveProfileNameFromModel } from "#/utils/derive-profile-name";
+import {
+  deriveProfileNameFromModel,
+  PROFILE_NAME_PATTERN,
+} from "#/utils/derive-profile-name";
 import { LlmProfilesManager } from "#/components/features/settings/llm-profiles-manager";
+import { ProfileNameInput } from "#/components/features/settings/profile-name-input";
 
 const LLM_EXCLUDED_KEYS = new Set(["llm.model", "llm.api_key", "llm.base_url"]);
 
@@ -146,6 +150,10 @@ export function LlmSettingsScreen({
   // Personal scope lands on the Available Models list first; org-scope
   // defaults (which don't have profiles) always open straight into the form.
   const [showProfiles, setShowProfiles] = React.useState(scope === "personal");
+  // User-supplied profile name. Empty → fall back to deriveProfileNameFromModel
+  // in handleSaveSuccess. Reset on every form open so a stale name from the
+  // previous Add doesn't leak in.
+  const [profileName, setProfileName] = React.useState("");
   // When the user clicks Basic / Advanced / All from inside the profiles
   // view, we want the LLM form to open on *that* tier — not whatever the
   // schema happened to infer. We stash the choice here and consume it in
@@ -283,6 +291,9 @@ export function LlmSettingsScreen({
         );
       };
 
+      const profileNamePlaceholder =
+        deriveProfileNameFromModel(modelValue) ?? "";
+
       return (
         <div className="flex flex-col gap-6">
           {infoMessageKey ? (
@@ -292,6 +303,18 @@ export function LlmSettingsScreen({
             >
               {t(infoMessageKey)}
             </p>
+          ) : null}
+
+          {scope === "personal" ? (
+            <ProfileNameInput
+              testId="llm-profile-name-input"
+              ruleTestId="llm-profile-name-rule"
+              value={profileName}
+              placeholder={profileNamePlaceholder}
+              onChange={setProfileName}
+              isDisabled={isDisabled}
+              isOptional
+            />
           ) : null}
 
           {view === "basic" ? (
@@ -365,6 +388,8 @@ export function LlmSettingsScreen({
       infoMessageKey,
       isSaasMode,
       defaultModel,
+      profileName,
+      scope,
       selectedProvider,
       settings?.llm_api_key_set,
       t,
@@ -421,7 +446,17 @@ export function LlmSettingsScreen({
 
   const handleSaveSuccess = React.useCallback(async () => {
     const savedModel = lastSavedModelRef.current;
-    const name = savedModel ? deriveProfileNameFromModel(savedModel) : null;
+    const trimmedUserName = profileName.trim();
+    // Use the user-supplied name only if it matches the backend regex —
+    // otherwise silently fall back to the model-derived default (the helper
+    // text under the input has already warned them their name was invalid).
+    const userName = PROFILE_NAME_PATTERN.test(trimmedUserName)
+      ? trimmedUserName
+      : null;
+    const derivedName = savedModel
+      ? deriveProfileNameFromModel(savedModel)
+      : null;
+    const name = userName ?? derivedName;
 
     // Auto-saved profiles are a personal-scope feature — organization default
     // LLM settings reuse this screen but shouldn't spawn per-user profiles.
@@ -441,11 +476,13 @@ export function LlmSettingsScreen({
       }
     }
 
+    setProfileName("");
     setInitialViewHint(null);
     setShowProfiles(true);
-  }, [activateProfile, saveProfile, scope]);
+  }, [activateProfile, profileName, saveProfile, scope]);
 
   const openForm = (view: SettingsView | null) => {
+    setProfileName("");
     setInitialViewHint(view);
     setShowProfiles(false);
   };

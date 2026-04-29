@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BrandButton } from "#/components/features/settings/brand-button";
-import { SettingsInput } from "#/components/features/settings/settings-input";
+import { ProfileNameInput } from "#/components/features/settings/profile-name-input";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ApiKeyModalBase } from "#/components/features/settings/api-key-modal-base";
 import { ContextMenu } from "#/ui/context-menu";
@@ -22,9 +22,7 @@ import EditIcon from "#/icons/u-edit.svg?react";
 import DeleteIcon from "#/icons/u-delete.svg?react";
 import CheckmarkIcon from "#/icons/checkmark.svg?react";
 import ThreeDotsVerticalIcon from "#/icons/three-dots-vertical.svg?react";
-
-// Mirrors the backend regex ^[A-Za-z0-9._-]{1,64}$ in settings_router.py.
-const PROFILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
+import { PROFILE_NAME_PATTERN } from "#/utils/derive-profile-name";
 
 interface RenameProfileModalProps {
   profile: LlmProfileSummary | null;
@@ -101,22 +99,12 @@ function RenameProfileModal({ profile, onClose }: RenameProfileModalProps) {
       footer={footer}
     >
       <div data-testid="rename-profile-modal" className="flex flex-col gap-3">
-        <SettingsInput
+        <ProfileNameInput
           testId="rename-profile-input"
-          label={t(I18nKey.SETTINGS$NAME)}
-          type="text"
+          ruleTestId="rename-profile-rule"
           value={newName}
-          className="w-full"
           onChange={setNewName}
         />
-        <p
-          data-testid="rename-profile-rule"
-          className={`text-xs ${
-            trimmed.length > 0 && !isValid ? "text-red-400" : "text-gray-400"
-          }`}
-        >
-          {t(I18nKey.SETTINGS$PROFILE_NAME_RULE)}
-        </p>
       </div>
     </ApiKeyModalBase>
   );
