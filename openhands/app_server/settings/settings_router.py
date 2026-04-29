@@ -531,7 +531,7 @@ async def delete_profile(
     """
     async with _user_profile_locks[_profile_lock_key(user_id)]:
         settings = await settings_store.load()
-        if settings is not None and settings.llm_profiles.delete(name):
+        if settings is not None and settings.delete_profile(name):
             await settings_store.store(settings)
 
     return ProfileMutationResponse(name=name, message=f"Profile '{name}' deleted")

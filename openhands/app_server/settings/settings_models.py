@@ -318,6 +318,22 @@ class Settings(BaseModel):
         )
         self.llm_profiles.active = name
 
+    def delete_profile(self, name: str) -> bool:
+        """Delete a saved profile, promoting a fallback when it was active.
+
+        Returns False if the profile didn't exist; True otherwise. When the
+        deleted profile was active and other profiles remain, switches to
+        the first remaining one (insertion order — same ordering ``rename``
+        relies on) so the user isn't left without an active LLM.
+        """
+        was_active = self.llm_profiles.active == name
+        if not self.llm_profiles.delete(name):
+            return False
+        if was_active and self.llm_profiles.profiles:
+            fallback = next(iter(self.llm_profiles.profiles))
+            self.switch_to_profile(fallback)
+        return True
+
     @model_validator(mode='before')
     @classmethod
     def _normalize_inputs(cls, data: dict | object) -> dict | object:
