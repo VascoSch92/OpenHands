@@ -81,6 +81,7 @@ export default defineConfig(({ mode }) => {
           target: API_URL,
           changeOrigin: true,
           secure: !INSECURE_SKIP_VERIFY,
+          ws: true,
         },
         "/ws": {
           target: WS_URL,

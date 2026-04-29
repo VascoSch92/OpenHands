@@ -89,3 +89,21 @@ export function buildWebSocketUrl(
 
   return `${protocol}//${baseHost}${pathPrefix}/sockets/events/${conversationId}`;
 }
+
+/**
+ * Builds the WebSocket URL for the app-server event stream proxy.
+ * The proxy authenticates via the existing app cookie and forwards to the
+ * sandbox agent server on the backend, so the browser does not need the
+ * sandbox host or session_api_key.
+ */
+export function buildAppServerWebSocketUrl(
+  conversationId: string | undefined,
+): string | null {
+  if (!conversationId) {
+    return null;
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const backendHost =
+    import.meta.env.VITE_BACKEND_BASE_URL || window.location.host;
+  return `${protocol}//${backendHost}/api/v1/conversation/${conversationId}/events/stream`;
+}

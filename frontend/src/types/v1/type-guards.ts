@@ -22,6 +22,7 @@ import {
   ServerErrorEvent,
 } from "./core/events/conversation-state-event";
 import { HookExecutionEvent } from "./core/events/hook-execution-event";
+import { StreamingDeltaEvent } from "./core/events/streaming-delta-event";
 import { SystemPromptEvent } from "./core/events/system-event";
 import type { OpenHandsParsedEvent } from "../core/index";
 
@@ -216,6 +217,11 @@ export const isHookExecutionEvent = (
   event: OpenHandsEvent,
 ): event is HookExecutionEvent =>
   "kind" in event && event.kind === "HookExecutionEvent";
+
+export const isStreamingDeltaEvent = (
+  event: OpenHandsEvent | { kind?: string },
+): event is StreamingDeltaEvent =>
+  "kind" in event && event.kind === "StreamingDeltaEvent";
 
 // =============================================================================
 // TEMPORARY COMPATIBILITY TYPE GUARDS

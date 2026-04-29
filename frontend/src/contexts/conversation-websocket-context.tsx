@@ -31,14 +31,17 @@ import {
   isPlanningFileEditorObservationEvent,
   isBrowserObservationEvent,
   isBrowserNavigateActionEvent,
+  isStreamingDeltaEvent,
+  isMessageEvent,
 } from "#/types/v1/type-guards";
+import { useStreamingMessageStore } from "#/stores/streaming-message-store";
 import { ConversationStateUpdateEventStats } from "#/types/v1/core/events/conversation-state-event";
 import type {
   ConversationErrorEvent,
   ServerErrorEvent,
 } from "#/types/v1/core/events/conversation-state-event";
 import { handleActionEventCacheInvalidation } from "#/utils/cache-utils";
-import { buildWebSocketUrl } from "#/utils/websocket-url";
+import { buildAppServerWebSocketUrl } from "#/utils/websocket-url";
 import type {
   V1AppConversation,
   V1SendMessageRequest,
@@ -189,15 +192,15 @@ export function ConversationWebSocketProvider({
     [],
   );
 
-  // Build WebSocket URL from props
-  // Only build URL if we have both conversationId and conversationUrl
-  // This prevents connection attempts during task polling phase
+  // Build WebSocket URL from props. We connect to the app-server proxy at
+  // /api/v1/conversation/{id}/events/stream — auth uses the app cookie and the
+  // proxy resolves the sandbox upstream, so the browser only needs the id.
+  // We still gate on conversationUrl so we wait for the conversation to be ready.
   const wsUrl = useMemo(() => {
-    // Don't attempt connection if we're missing required data
     if (!conversationId || !conversationUrl) {
       return null;
     }
-    return buildWebSocketUrl(conversationId, conversationUrl);
+    return buildAppServerWebSocketUrl(conversationId);
   }, [conversationId, conversationUrl]);
 
   const planningAgentWsUrl = useMemo(() => {
@@ -215,10 +218,7 @@ export function ConversationWebSocketProvider({
       return null;
     }
 
-    return buildWebSocketUrl(
-      planningAgentConversation.id,
-      planningAgentConversation.conversation_url,
-    );
+    return buildAppServerWebSocketUrl(planningAgentConversation.id);
   }, [subConversations]);
 
   // Merged connection state - reflects combined status of both connections
@@ -367,6 +367,16 @@ export function ConversationWebSocketProvider({
       try {
         const event = JSON.parse(messageEvent.data);
 
+        // Token streaming deltas: accumulate in the streaming buffer and
+        // skip the regular event-store path so they don't render as their
+        // own chat lines. The final MessageEvent below clears the buffer.
+        if (isStreamingDeltaEvent(event)) {
+          if (event.content) {
+            useStreamingMessageStore.getState().appendDelta(event.content);
+          }
+          return;
+        }
+
         // Track received events for history loading (count ALL events from WebSocket)
         // Always count when loading, even if we don't have the expected count yet
         if (isLoadingHistoryMain) {
@@ -382,6 +392,10 @@ export function ConversationWebSocketProvider({
 
         // Use type guard to validate v1 event structure
         if (isV1Event(event)) {
+          // Final assistant message arrived — clear the streaming buffer.
+          if (isMessageEvent(event) && event.llm_message.role === "assistant") {
+            useStreamingMessageStore.getState().reset();
+          }
           addEvent(event);
 
           // Handle displayable error events - show error banner
@@ -699,14 +713,11 @@ export function ConversationWebSocketProvider({
 
   // Separate WebSocket options for main connection
   const mainWebsocketOptions: WebSocketHookOptions = useMemo(() => {
+    // Auth is handled by the app-server cookie via the /api/v1 proxy, so we
+    // don't pass session_api_key. resend_mode='all' replays history on connect.
     const queryParams: Record<string, string | boolean> = {
-      resend_all: true,
+      resend_mode: "all",
     };
-
-    // Add session_api_key if available
-    if (sessionApiKey) {
-      queryParams.session_api_key = sessionApiKey;
-    }
 
     return {
       queryParams,
@@ -762,13 +773,8 @@ export function ConversationWebSocketProvider({
   // Separate WebSocket options for planning agent connection
   const planningWebsocketOptions: WebSocketHookOptions = useMemo(() => {
     const queryParams: Record<string, string | boolean> = {
-      resend_all: true,
+      resend_mode: "all",
     };
-
-    // Add session_api_key if available
-    if (sessionApiKey) {
-      queryParams.session_api_key = sessionApiKey;
-    }
 
     const planningAgentConversation = subConversations?.[0];
 

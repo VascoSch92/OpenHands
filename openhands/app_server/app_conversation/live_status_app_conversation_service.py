@@ -991,6 +991,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             base_url=base_url,
             api_key=user.agent_settings.llm.api_key,
             usage_id='agent',
+            stream=True,
         )
 
     async def _get_tavily_api_key(self, user: UserInfo) -> str | None:

@@ -25,6 +25,7 @@ import { useErrorMessageStore } from "#/stores/error-message-store";
 import { useOptimisticUserMessageStore } from "#/stores/optimistic-user-message-store";
 import { ErrorMessageBanner } from "./error-message-banner";
 import { Messages as V1Messages } from "#/components/v1/chat";
+import { StreamingMessage } from "./streaming-message";
 import { useUnifiedUploadFiles } from "#/hooks/mutation/use-unified-upload-files";
 import { validateFiles } from "#/utils/file-validation";
 import { useConversationStore } from "#/stores/conversation-store";
@@ -290,6 +291,8 @@ export function ChatInterface() {
           {showV1Messages && v1UserEventsExist && (
             <V1Messages messages={v1UiEvents} allEvents={v1FullEvents} />
           )}
+
+          <StreamingMessage />
         </div>
 
         <div className="flex flex-col gap-[6px]">
