@@ -17,8 +17,6 @@ from openhands.core.config import load_openhands_config
 from openhands.core.config.openhands_config import OpenHandsConfig
 from openhands.server.config.server_config import ServerConfig, load_server_config
 from openhands.server.types import ServerConfigInterface
-from openhands.storage import get_file_store
-from openhands.storage.files import FileStore
 from openhands.utils.import_utils import get_impl
 
 load_dotenv()
@@ -29,10 +27,6 @@ assert isinstance(server_config_interface, ServerConfig), (
     'Loaded server config interface is not a ServerConfig, despite this being assumed'
 )
 server_config: ServerConfig = server_config_interface
-file_store: FileStore = get_file_store(
-    file_store_type=config.file_store,
-    file_store_path=config.file_store_path,
-)
 
 client_manager = None
 redis_host = os.environ.get('REDIS_HOST')
