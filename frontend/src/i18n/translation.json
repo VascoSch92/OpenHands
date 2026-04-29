@@ -24054,23 +24054,6 @@
     "uk": "Організації Git не знайдено.",
     "ca": "No s'han trobat organitzacions Git."
   },
-  "SETTINGS$NAV_PROFILES": {
-    "en": "Profiles",
-    "ja": "プロファイル",
-    "zh-CN": "配置文件",
-    "zh-TW": "設定檔",
-    "ko-KR": "프로필",
-    "no": "Profiler",
-    "ar": "ملفات التعريف",
-    "de": "Profile",
-    "fr": "Profils",
-    "it": "Profili",
-    "pt": "Perfis",
-    "es": "Perfiles",
-    "ca": "Perfils",
-    "tr": "Profiller",
-    "uk": "Профілі"
-  },
   "SETTINGS$PROFILES_DESCRIPTION": {
     "en": "Profiles are created automatically when you save a configuration on the LLM page. The newest one becomes active; switch, rename, or delete saved profiles from this list.",
     "ja": "LLMページで設定を保存すると、プロファイルが自動的に作成されます。最新のプロファイルがアクティブになり、このリストから切り替え、名前の変更、削除ができます。",
@@ -24291,6 +24274,23 @@
     "ca": "Perfils disponibles",
     "tr": "Kullanılabilir Profiller",
     "uk": "Доступні профілі"
+  },
+  "SETTINGS$BACK_TO_LLM_LIST": {
+    "en": "Back to LLM list",
+    "ja": "LLMリストに戻る",
+    "zh-CN": "返回 LLM 列表",
+    "zh-TW": "返回 LLM 列表",
+    "ko-KR": "LLM 목록으로 돌아가기",
+    "no": "Tilbake til LLM-listen",
+    "ar": "العودة إلى قائمة LLM",
+    "de": "Zurück zur LLM-Liste",
+    "fr": "Retour à la liste LLM",
+    "it": "Torna all'elenco LLM",
+    "pt": "Voltar à lista de LLM",
+    "es": "Volver a la lista de LLM",
+    "ca": "Torna a la llista d'LLM",
+    "tr": "LLM listesine dön",
+    "uk": "Назад до списку LLM"
   },
   "SETTINGS$ADD_LLM_PROFILE": {
     "en": "Add LLM Profile",

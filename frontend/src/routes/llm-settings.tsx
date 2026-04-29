@@ -1,6 +1,7 @@
 import React from "react";
 import { useSearchParams } from "react-router";
 import { useTranslation } from "react-i18next";
+import { FaChevronLeft } from "react-icons/fa6";
 import { ModelSelector } from "#/components/shared/modals/settings/model-selector";
 import { createPermissionGuard } from "#/utils/org/permission-guard";
 import { requireOrgDefaultsRedirect } from "#/utils/org/saas-redirect-to-org-defaults-guard";
@@ -29,7 +30,6 @@ import { DEFAULT_SETTINGS } from "#/services/settings";
 import { useSaveLlmProfile } from "#/hooks/mutation/use-save-llm-profile";
 import { useActivateLlmProfile } from "#/hooks/mutation/use-activate-llm-profile";
 import { deriveProfileNameFromModel } from "#/utils/derive-profile-name";
-import { BrandButton } from "#/components/features/settings/brand-button";
 import { LlmProfilesManager } from "#/components/features/settings/llm-profiles-manager";
 
 const LLM_EXCLUDED_KEYS = new Set(["llm.model", "llm.api_key", "llm.base_url"]);
@@ -445,24 +445,6 @@ export function LlmSettingsScreen({
     setShowProfiles(true);
   }, [activateProfile, saveProfile, scope]);
 
-  // A "Profiles" button in the form-view control strip returns the user to
-  // the Available Models list. The label mirrors the sidebar nav wording;
-  // only personal scope has profiles, so org-scope hides the button.
-  const profilesButton =
-    scope === "personal" ? (
-      <BrandButton
-        testId="llm-section-tab-profiles"
-        type="button"
-        variant="secondary"
-        onClick={() => {
-          setInitialViewHint(null);
-          setShowProfiles(true);
-        }}
-      >
-        {t(I18nKey.SETTINGS$NAV_PROFILES)}
-      </BrandButton>
-    ) : null;
-
   const openForm = (view: SettingsView | null) => {
     setInitialViewHint(view);
     setShowProfiles(false);
@@ -477,20 +459,41 @@ export function LlmSettingsScreen({
     );
   }
 
+  // Sub-page back affordance (personal scope only — org-defaults has no
+  // parent list to return to). Replaces the previous "Profiles" trailing
+  // action so the form view follows the second-level settings pattern.
+  const backToProfiles =
+    scope === "personal" ? (
+      <button
+        data-testid="llm-back-to-profiles"
+        type="button"
+        onClick={() => {
+          setInitialViewHint(null);
+          setShowProfiles(true);
+        }}
+        className="flex items-center gap-2 self-start text-sm text-gray-300 hover:text-white"
+      >
+        <FaChevronLeft size={12} aria-hidden="true" />
+        {t(I18nKey.SETTINGS$BACK_TO_LLM_LIST)}
+      </button>
+    ) : null;
+
   return (
-    <SdkSectionPage
-      scope={scope}
-      sectionKeys={["llm"]}
-      excludeKeys={LLM_EXCLUDED_KEYS}
-      header={buildHeader}
-      buildPayload={buildPayload}
-      onSaveSuccess={handleSaveSuccess}
-      getInitialView={getInitialView}
-      trailingActions={profilesButton}
-      forceShowAdvancedView
-      allowAllView={!isSaasMode}
-      testId="llm-settings-screen"
-    />
+    <div className="flex flex-col gap-4">
+      {backToProfiles}
+      <SdkSectionPage
+        scope={scope}
+        sectionKeys={["llm"]}
+        excludeKeys={LLM_EXCLUDED_KEYS}
+        header={buildHeader}
+        buildPayload={buildPayload}
+        onSaveSuccess={handleSaveSuccess}
+        getInitialView={getInitialView}
+        forceShowAdvancedView
+        allowAllView={!isSaasMode}
+        testId="llm-settings-screen"
+      />
+    </div>
   );
 }
 
