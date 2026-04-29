@@ -6,6 +6,7 @@ import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ApiKeyModalBase } from "#/components/features/settings/api-key-modal-base";
 import { ContextMenu } from "#/ui/context-menu";
 import { ContextMenuListItem } from "#/components/features/context-menu/context-menu-list-item";
+import { ConversationNameContextMenuIconText } from "#/components/features/conversation/conversation-name-context-menu-icon-text";
 import { useClickOutsideElement } from "#/hooks/use-click-outside-element";
 import { LlmProfileSummary } from "#/api/settings-service/profiles-service.api";
 import { useLlmProfiles } from "#/hooks/query/use-llm-profiles";
@@ -270,13 +271,13 @@ function ProfileActionsMenu({
               onClose();
             }}
             isDisabled={isDisabled}
+            className="cursor-pointer p-0 h-auto hover:bg-transparent"
           >
-            <div
-              className={`flex items-center gap-2${isDestructive ? " text-red-400" : ""}`}
-            >
-              <Icon width={16} height={16} />
-              <span>{label}</span>
-            </div>
+            <ConversationNameContextMenuIconText
+              icon={<Icon width={16} height={16} />}
+              text={label}
+              className={isDestructive ? "text-red-400" : undefined}
+            />
           </ContextMenuListItem>
         ),
       )}
