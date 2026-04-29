@@ -105,12 +105,12 @@ const sampleProfiles: ProfilesList = {
 };
 
 describe("LlmProfilesManager", () => {
-  it("shows the Available Models heading", () => {
+  it("shows the Available Profiles heading", () => {
     profilesState.data = sampleProfiles;
     renderManager();
 
     expect(
-      screen.getByText("SETTINGS$AVAILABLE_MODELS"),
+      screen.getByText("SETTINGS$AVAILABLE_PROFILES"),
     ).toBeInTheDocument();
   });
 

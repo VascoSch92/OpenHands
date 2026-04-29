@@ -453,7 +453,7 @@ export function LlmProfilesManager({
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-white">
-            {t(I18nKey.SETTINGS$AVAILABLE_MODELS)}
+            {t(I18nKey.SETTINGS$AVAILABLE_PROFILES)}
           </h2>
           {onAddProfile ? (
             <BrandButton

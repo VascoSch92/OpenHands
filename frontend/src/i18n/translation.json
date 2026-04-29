@@ -24275,22 +24275,22 @@
     "tr": "\"{{name}}\" profiline geçildi",
     "uk": "Перемкнуто на профіль \"{{name}}\""
   },
-  "SETTINGS$AVAILABLE_MODELS": {
-    "en": "Available Models",
-    "ja": "利用可能なモデル",
-    "zh-CN": "可用模型",
-    "zh-TW": "可用模型",
-    "ko-KR": "사용 가능한 모델",
-    "no": "Tilgjengelige modeller",
-    "ar": "النماذج المتاحة",
-    "de": "Verfügbare Modelle",
-    "fr": "Modèles disponibles",
-    "it": "Modelli disponibili",
-    "pt": "Modelos disponíveis",
-    "es": "Modelos disponibles",
-    "ca": "Models disponibles",
-    "tr": "Kullanılabilir Modeller",
-    "uk": "Доступні моделі"
+  "SETTINGS$AVAILABLE_PROFILES": {
+    "en": "Available Profiles",
+    "ja": "利用可能なプロファイル",
+    "zh-CN": "可用配置文件",
+    "zh-TW": "可用設定檔",
+    "ko-KR": "사용 가능한 프로필",
+    "no": "Tilgjengelige profiler",
+    "ar": "الملفات الشخصية المتاحة",
+    "de": "Verfügbare Profile",
+    "fr": "Profils disponibles",
+    "it": "Profili disponibili",
+    "pt": "Perfis disponíveis",
+    "es": "Perfiles disponibles",
+    "ca": "Perfils disponibles",
+    "tr": "Kullanılabilir Profiller",
+    "uk": "Доступні профілі"
   },
   "SETTINGS$ADD_LLM_PROFILE": {
     "en": "Add LLM Profile",
