@@ -108,6 +108,14 @@ function RenameProfileModal({ profile, onClose }: RenameProfileModalProps) {
           className="w-full"
           onChange={setNewName}
         />
+        <p
+          data-testid="rename-profile-rule"
+          className={`text-xs ${
+            trimmed.length > 0 && !isValid ? "text-red-400" : "text-gray-400"
+          }`}
+        >
+          {t(I18nKey.SETTINGS$PROFILE_NAME_RULE)}
+        </p>
       </div>
     </ApiKeyModalBase>
   );

@@ -24208,7 +24208,7 @@
     "uk": "Видалити профіль \"{{name}}\"? Цю дію не можна скасувати."
   },
   "SETTINGS$PROFILE_NAME_RULE": {
-    "en": "Name must be 1–64 characters, letters, digits, dot, dash, or underscore.",
+    "en": "Name must be 1–64 characters: letters, digits, dot, dash, or underscore.",
     "ja": "名前は1〜64文字で、英数字、ドット、ハイフン、アンダースコアのみ使用できます。",
     "zh-CN": "名称必须为 1–64 个字符，只能包含字母、数字、点、短划线或下划线。",
     "zh-TW": "名稱必須為 1–64 個字元，僅能包含字母、數字、點、短橫線或底線。",
@@ -24282,7 +24282,7 @@
     "zh-TW": "可用設定檔",
     "ko-KR": "사용 가능한 프로필",
     "no": "Tilgjengelige profiler",
-    "ar": "الملفات الشخصية المتاحة",
+    "ar": "ملفات التعريف المتاحة",
     "de": "Verfügbare Profile",
     "fr": "Profils disponibles",
     "it": "Profili disponibili",
