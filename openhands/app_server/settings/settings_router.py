@@ -23,6 +23,7 @@ from openhands.app_server.settings.llm_profiles import (
     ProfileLimitExceededError,
     ProfileNotFoundError,
     StrictLLM,
+    has_real_api_key,
 )
 from openhands.app_server.settings.settings_models import (
     GETSettingsModel,
@@ -449,7 +450,7 @@ async def get_profile(
             detail=f"Profile '{name}' not found",
         )
 
-    api_key_set = profile.api_key is not None
+    api_key_set = has_real_api_key(profile.api_key)
     config = profile.model_dump(mode='json')
     config['api_key'] = None  # never echo a mask; use api_key_set instead
 

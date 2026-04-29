@@ -123,7 +123,10 @@ describe("useSaveLlmProfile", () => {
 });
 
 describe("useDeleteLlmProfile", () => {
-  it("calls deleteProfile and invalidates the profiles query", async () => {
+  it("invalidates both the profiles list and the settings cache", async () => {
+    // Deleting the active profile clears ``llm_profiles.active`` on the
+    // backend — the settings query has to refetch or the LLM page will
+    // keep showing the deleted profile as in-use.
     vi.mocked(ProfilesService.deleteProfile).mockResolvedValue();
     const client = makeClient();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
@@ -134,9 +137,12 @@ describe("useDeleteLlmProfile", () => {
     await result.current.mutateAsync("my-profile");
 
     expect(ProfilesService.deleteProfile).toHaveBeenCalledWith("my-profile");
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: [LLM_PROFILES_QUERY_KEY],
-    });
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      ([arg]) => (arg as { queryKey: unknown[] }).queryKey,
+    );
+    expect(invalidatedKeys).toEqual(
+      expect.arrayContaining([[LLM_PROFILES_QUERY_KEY], ["settings"]]),
+    );
   });
 });
 
@@ -164,7 +170,10 @@ describe("useActivateLlmProfile", () => {
 });
 
 describe("useRenameLlmProfile", () => {
-  it("calls renameProfile with the new name and invalidates the list", async () => {
+  it("invalidates both the profiles list and the settings cache", async () => {
+    // Renaming the active profile renames ``llm_profiles.active`` on the
+    // backend — the settings query has to refetch or any UI surface that
+    // reads the active-profile name will stay stale.
     vi.mocked(ProfilesService.renameProfile).mockResolvedValue();
     const client = makeClient();
     const invalidateSpy = vi.spyOn(client, "invalidateQueries");
@@ -175,9 +184,12 @@ describe("useRenameLlmProfile", () => {
     await result.current.mutateAsync({ name: "old", newName: "new" });
 
     expect(ProfilesService.renameProfile).toHaveBeenCalledWith("old", "new");
-    expect(invalidateSpy).toHaveBeenCalledWith({
-      queryKey: [LLM_PROFILES_QUERY_KEY],
-    });
+    const invalidatedKeys = invalidateSpy.mock.calls.map(
+      ([arg]) => (arg as { queryKey: unknown[] }).queryKey,
+    );
+    expect(invalidatedKeys).toEqual(
+      expect.arrayContaining([[LLM_PROFILES_QUERY_KEY], ["settings"]]),
+    );
   });
 });
 
@@ -195,9 +207,9 @@ describe("mutation failure paths", () => {
     const { result } = renderHook(() => useSaveLlmProfile(), {
       wrapper: wrapperFor(client),
     });
-    await expect(
-      result.current.mutateAsync({ name: "x" }),
-    ).rejects.toThrow("conflict");
+    await expect(result.current.mutateAsync({ name: "x" })).rejects.toThrow(
+      "conflict",
+    );
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 

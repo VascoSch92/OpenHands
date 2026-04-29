@@ -33,7 +33,9 @@ function resetProfilesServiceDefaults() {
   vi.mocked(ProfilesService.listProfiles)
     .mockReset()
     .mockResolvedValue({ profiles: [], active_profile: null });
-  vi.mocked(ProfilesService.saveProfile).mockReset().mockResolvedValue(undefined);
+  vi.mocked(ProfilesService.saveProfile)
+    .mockReset()
+    .mockResolvedValue(undefined);
   vi.mocked(ProfilesService.deleteProfile)
     .mockReset()
     .mockResolvedValue(undefined);
@@ -193,7 +195,6 @@ async function selectModel(modelLabel: string) {
   return modelInput;
 }
 
-
 function getPayloadAgentSettings(
   payload: Record<string, unknown>,
 ): Record<string, unknown> {
@@ -318,10 +319,7 @@ describe("LlmSettingsScreen", () => {
   });
 
   it("keeps Advanced visible but hides All in SaaS mode for the default LLM route schema", async () => {
-    vi.spyOn(
-      organizationService,
-      "getOrganizationSettings",
-    ).mockResolvedValue(
+    vi.spyOn(organizationService, "getOrganizationSettings").mockResolvedValue(
       buildSettings({
         agent_settings: {
           llm: {
@@ -343,7 +341,9 @@ describe("LlmSettingsScreen", () => {
 
     await userEvent.click(screen.getByTestId("sdk-section-advanced-toggle"));
 
-    expect(screen.getByTestId("llm-settings-form-advanced")).toBeInTheDocument();
+    expect(
+      screen.getByTestId("llm-settings-form-advanced"),
+    ).toBeInTheDocument();
     expect(screen.getByTestId("llm-custom-model-input")).toBeInTheDocument();
     expect(screen.getByTestId("base-url-input")).toBeInTheDocument();
   });
@@ -515,10 +515,7 @@ describe("LlmSettingsScreen", () => {
       ],
     });
 
-    vi.spyOn(
-      organizationService,
-      "getOrganizationSettings",
-    ).mockResolvedValue(
+    vi.spyOn(organizationService, "getOrganizationSettings").mockResolvedValue(
       buildSettings({
         llm_model: "gpt-4",
         llm_base_url: "https://api.openai.com",
@@ -900,7 +897,8 @@ describe("LlmSettingsScreen", () => {
               string,
               SettingsValue
             >) ?? {}),
-            ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+            ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ??
+              {}),
           },
         };
 
@@ -972,7 +970,8 @@ describe("LlmSettingsScreen", () => {
             string,
             SettingsValue
           >) ?? {}),
-          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ??
+            {}),
         };
 
         persistedSettings = buildSettings({
@@ -1011,15 +1010,20 @@ describe("LlmSettingsScreen", () => {
       expect(getSettingsSpy).toHaveBeenCalledTimes(2);
     });
 
+    // Personal scope flips to the Available Models list after a successful
+    // save (``handleSaveSuccess`` → ``setShowProfiles(true)``).
     await waitFor(() => {
-      expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
+      expect(screen.getByTestId("add-llm-profile")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-basic"),
+      ).not.toBeInTheDocument();
       expect(
         screen.queryByTestId("llm-settings-form-advanced"),
       ).not.toBeInTheDocument();
     });
   });
 
-  it("keeps the basic view after save on SaaS personal settings when an inherited org search API key remains set on refetch", async () => {
+  it("returns to the profiles list after save on SaaS personal settings even when an inherited org search API key remains set on refetch", async () => {
     let persistedSettings = buildSettingsWithAdvancedToggle({
       llm_model: "openai/gpt-4o",
       search_api_key_set: true,
@@ -1050,7 +1054,8 @@ describe("LlmSettingsScreen", () => {
             string,
             SettingsValue
           >) ?? {}),
-          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ??
+            {}),
         };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
@@ -1091,6 +1096,19 @@ describe("LlmSettingsScreen", () => {
       expect(getSettingsSpy).toHaveBeenCalledTimes(2);
     });
 
+    // After save on personal SaaS, the screen returns to the Available
+    // Models list — not the advanced form — even though the refetched
+    // settings still carry an inherited search_api_key flag.
+    await waitFor(() => {
+      expect(screen.getByTestId("add-llm-profile")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+
+    // Re-entering the form via Add Profile must land on basic, not get
+    // bumped into advanced by the lingering search_api_key on refetch.
+    await userEvent.click(screen.getByTestId("add-llm-profile"));
     await waitFor(() => {
       expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
       expect(
@@ -1186,7 +1204,7 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
-  it("keeps the basic view after save when a stale legacy base URL lingers on refetch", async () => {
+  it("returns to the profiles list after save and re-enters the form in basic view even when a stale legacy base URL lingers on refetch", async () => {
     let persistedSettings = buildSettingsWithAdvancedToggle({
       llm_base_url: "https://stale.example/v1",
       agent_settings: {
@@ -1216,7 +1234,8 @@ describe("LlmSettingsScreen", () => {
             string,
             SettingsValue
           >) ?? {}),
-          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ??
+            {}),
         };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
@@ -1253,6 +1272,17 @@ describe("LlmSettingsScreen", () => {
       expect(getSettingsSpy).toHaveBeenCalledTimes(2);
     });
 
+    // Personal scope returns to Available Models after save.
+    await waitFor(() => {
+      expect(screen.getByTestId("add-llm-profile")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+
+    // Re-entering the form must not get bumped into advanced by the
+    // stale legacy base_url on refetch.
+    await userEvent.click(screen.getByTestId("add-llm-profile"));
     await waitFor(() => {
       expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
       expect(
@@ -1261,7 +1291,7 @@ describe("LlmSettingsScreen", () => {
     });
   });
 
-  it("keeps the basic view after saving a basic model change when refetch includes a provider base URL", async () => {
+  it("returns to the profiles list after saving a basic model change and re-enters the form in basic view even when refetch includes a provider base URL", async () => {
     let persistedSettings = buildSettingsWithAdvancedToggle();
 
     const getSettingsSpy = vi
@@ -1284,7 +1314,8 @@ describe("LlmSettingsScreen", () => {
             string,
             SettingsValue
           >) ?? {}),
-          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ?? {}),
+          ...((payloadAgentSettings.llm as Record<string, SettingsValue>) ??
+            {}),
         };
 
         persistedSettings = buildSettingsWithAdvancedToggle({
@@ -1330,6 +1361,17 @@ describe("LlmSettingsScreen", () => {
       expect(getSettingsSpy).toHaveBeenCalledTimes(2);
     });
 
+    // Personal scope returns to Available Models after save.
+    await waitFor(() => {
+      expect(screen.getByTestId("add-llm-profile")).toBeInTheDocument();
+      expect(
+        screen.queryByTestId("llm-settings-form-advanced"),
+      ).not.toBeInTheDocument();
+    });
+
+    // Re-entering the form must land on basic — the provider-default
+    // base_url that came back on refetch must not pop us into advanced.
+    await userEvent.click(screen.getByTestId("add-llm-profile"));
     await waitFor(() => {
       expect(screen.getByTestId("llm-settings-form-basic")).toBeInTheDocument();
       expect(
@@ -2082,7 +2124,10 @@ describe("LlmSettingsScreen", () => {
       // Org defaults reuse this screen with scope="org". Profiles are a
       // per-user feature, so touching the profiles endpoints here would
       // incorrectly spawn profiles on the signed-in user's settings.
-      vi.spyOn(organizationService, "getOrganizationSettings").mockResolvedValue(
+      vi.spyOn(
+        organizationService,
+        "getOrganizationSettings",
+      ).mockResolvedValue(
         buildSettings({
           agent_settings: { llm: { model: "openai/gpt-4o" } },
         }),

@@ -11,6 +11,10 @@ export function useDeleteLlmProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [LLM_PROFILES_QUERY_KEY] });
+      // Deleting the active profile clears ``llm_profiles.active`` server-side;
+      // the settings cache must refetch or the LLM page will keep showing
+      // the deleted profile as in-use.
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 }

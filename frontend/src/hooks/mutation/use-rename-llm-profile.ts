@@ -16,6 +16,10 @@ export function useRenameLlmProfile() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [LLM_PROFILES_QUERY_KEY] });
+      // Renaming the active profile changes ``llm_profiles.active`` to the
+      // new name; the settings cache must refetch so any UI that reads the
+      // active-profile name stays in sync.
+      queryClient.invalidateQueries({ queryKey: ["settings"] });
     },
   });
 }
