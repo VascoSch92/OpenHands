@@ -508,7 +508,7 @@ export function LlmSettingsScreen({
           setInitialViewHint(null);
           setShowProfiles(true);
         }}
-        className="flex items-center gap-2 self-start text-sm text-gray-300 hover:text-white"
+        className="flex items-center gap-2 self-start text-sm text-gray-300 hover:text-white cursor-pointer"
       >
         <FaChevronLeft size={12} aria-hidden="true" />
         {t(I18nKey.SETTINGS$BACK_TO_LLM_LIST)}
