@@ -441,10 +441,7 @@ export function LlmProfilesManager({
     }).catch(() => null);
   };
 
-  const handleEdit = async (profile: LlmProfileSummary) => {
-    if (profile.name !== active) {
-      await handleActivate(profile.name);
-    }
+  const handleEdit = (profile: LlmProfileSummary) => {
     onEditProfile?.(profile);
   };
 
