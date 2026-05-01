@@ -335,6 +335,10 @@ export function ConversationWebSocketProvider({
     receivedEventCountRefMain.current = 0;
     // Reset the tracked event ref when conversation changes
     latestPlanningFileEventRef.current = null;
+    // Reset the singleton streaming buffer on conversation switch / unmount so deltas don't leak.
+    return () => {
+      useStreamingMessageStore.getState().reset();
+    };
   }, [conversationId]);
 
   const { data: preloadedEvents, isFetched: isHistoryFetched } =
@@ -392,8 +396,15 @@ export function ConversationWebSocketProvider({
 
         // Use type guard to validate v1 event structure
         if (isV1Event(event)) {
-          // Final assistant message arrived — clear the streaming buffer.
+          // Final assistant message — clear the streaming buffer and seal it
+          // for ~1s so any post-final delta stragglers (the agent server can
+          // emit a few delta callbacks after publishing the MessageEvent) are
+          // discarded instead of repopulating the bubble.
           if (isMessageEvent(event) && event.llm_message.role === "assistant") {
+            useStreamingMessageStore.getState().reset(1000);
+          } else if (isUserMessageEvent(event)) {
+            // New user prompt — cancel the previous (now-stale) partial
+            // render so we don't race two answers in the same thread.
             useStreamingMessageStore.getState().reset();
           }
           addEvent(event);

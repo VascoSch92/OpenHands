@@ -2,15 +2,22 @@ import React from "react";
 import { useStreamingMessageStore } from "#/stores/streaming-message-store";
 import { useScrollContext } from "#/context/scroll-context";
 
+const FOLLOW_WINDOW_MS = 1500;
+
 export function StreamingMessage() {
   const displayed = useStreamingMessageStore((state) => state.displayed);
   const { autoScroll, scrollDomToBottom } = useScrollContext();
+  // Re-armed on each empty→non-empty transition; this component never unmounts so a mount-time deadline would expire before any token arrives.
+  const followUntilRef = React.useRef<number>(0);
+  const prevDisplayedRef = React.useRef<string>("");
 
-  // Follow the bottom while text streams in, but only if the user hasn't
-  // scrolled up. autoScroll flips to false on user scroll-up via the
-  // existing useScrollToBottom hook.
   React.useEffect(() => {
-    if (displayed && autoScroll) {
+    if (displayed && !prevDisplayedRef.current) {
+      followUntilRef.current = Date.now() + FOLLOW_WINDOW_MS;
+    }
+    prevDisplayedRef.current = displayed;
+
+    if (autoScroll && Date.now() < followUntilRef.current) {
       scrollDomToBottom();
     }
   }, [displayed, autoScroll, scrollDomToBottom]);
@@ -26,7 +33,7 @@ export function StreamingMessage() {
       className="mt-6 w-full max-w-full bg-transparent flex flex-col gap-2"
     >
       <div
-        className="text-sm"
+        className="text-sm min-h-[1.5em]"
         style={{
           whiteSpace: "pre-wrap",
           wordBreak: "break-word",
