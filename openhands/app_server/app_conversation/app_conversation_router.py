@@ -11,7 +11,7 @@ from typing import Annotated, AsyncGenerator, Literal
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -35,6 +35,7 @@ from openhands.app_server.app_conversation.app_conversation_models import (
     HookEventResponse,
     HookMatcherResponse,
     SkillResponse,
+    SwitchProfileRequest,
 )
 from openhands.app_server.app_conversation.app_conversation_service import (
     AppConversationService,
@@ -70,14 +71,18 @@ from openhands.app_server.services.httpx_client_injector import (
     set_httpx_client_keep_open,
 )
 from openhands.app_server.services.injector import InjectorState
+from openhands.app_server.settings.settings_models import Settings
+from openhands.app_server.settings.settings_router import LITE_LLM_API_URL
 from openhands.app_server.user.specifiy_user_context import USER_CONTEXT_ATTR
 from openhands.app_server.user.user_context import UserContext
+from openhands.app_server.user_auth import get_user_settings
 from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.app_server.utils.docker_utils import (
     replace_localhost_hostname_for_docker,
 )
 from openhands.sdk.skills import KeywordTrigger, TaskTrigger
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
+from openhands.utils.llm import resolve_llm_base_url
 
 # Handle anext compatibility for Python < 3.10
 if sys.version_info >= (3, 10):
@@ -552,6 +557,132 @@ async def send_message_to_conversation(
         sandbox_status=sandbox.status,
         message=None,
     )
+
+
+# Path inside the sandbox where the SDK's LLMProfileStore reads from.
+# Mirrors `Path.home() / ".openhands/profiles"` resolved against the
+# agent-server's runtime user (root in the standard images).
+_SANDBOX_PROFILE_DIR = '/root/.openhands/profiles'
+
+
+@router.post(
+    '/{conversation_id}/switch_profile',
+    responses={
+        404: {'description': 'Conversation, sandbox, or profile not found'},
+        409: {'description': 'Sandbox is not running'},
+        502: {'description': 'Agent server returned an error'},
+    },
+)
+async def switch_conversation_profile(
+    conversation_id: UUID,
+    request: SwitchProfileRequest,
+    user_settings: Settings | None = Depends(get_user_settings),
+    app_conversation_service: AppConversationService = (
+        app_conversation_service_dependency
+    ),
+    sandbox_service: SandboxService = sandbox_service_dependency,
+    sandbox_spec_service: SandboxSpecService = sandbox_spec_service_dependency,
+    httpx_client: httpx.AsyncClient = httpx_client_dependency,
+) -> Success:
+    """Switch the running conversation's LLM to a saved profile.
+
+    The agent-server's ``switch_profile`` endpoint reads the profile from a
+    sandbox-local FS directory; the user's saved profiles live on the
+    app-server side. This endpoint bridges the two: it materializes the
+    profile JSON into the sandbox's profile dir, then asks the agent-server
+    to swap.
+    """
+    if user_settings is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail='Settings not found',
+        )
+
+    profile_llm = user_settings.llm_profiles.get(request.profile_name)
+    if profile_llm is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Profile '{request.profile_name}' not found",
+        )
+
+    # Mirror the activate_profile fixup so a profile with an empty base_url
+    # picks up the provider default (e.g. the OpenHands LiteLLM proxy).
+    profile_llm = profile_llm.model_copy(
+        update={
+            'base_url': resolve_llm_base_url(
+                model=profile_llm.model,
+                base_url=profile_llm.base_url,
+                managed_proxy_url=LITE_LLM_API_URL,
+            ),
+        }
+    )
+
+    ctx = await _get_agent_server_context(
+        conversation_id,
+        app_conversation_service,
+        sandbox_service,
+        sandbox_spec_service,
+    )
+    if isinstance(ctx, JSONResponse):
+        # Helper already framed a 404 response; mirror its status code.
+        raise HTTPException(
+            status_code=ctx.status_code,
+            detail=f'Conversation {conversation_id} is not reachable',
+        )
+    if ctx is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail='Sandbox is paused; resume it before switching profiles.',
+        )
+
+    profile_json = profile_llm.model_dump_json(
+        exclude_none=True,
+        indent=2,
+        context={'expose_secrets': True},
+    )
+    headers = {'X-Session-API-Key': ctx.session_api_key} if ctx.session_api_key else {}
+    profile_path = f'{_SANDBOX_PROFILE_DIR}/{request.profile_name}.json'
+
+    try:
+        upload_response = await httpx_client.post(
+            f'{ctx.agent_server_url}/api/file/upload',
+            params={'path': profile_path},
+            files={
+                'file': (
+                    f'{request.profile_name}.json',
+                    profile_json.encode('utf-8'),
+                    'application/json',
+                ),
+            },
+            headers=headers,
+            timeout=30.0,
+        )
+        upload_response.raise_for_status()
+
+        switch_response = await httpx_client.post(
+            f'{ctx.agent_server_url}/api/conversations/{conversation_id}/switch_profile',
+            json={'profile_name': request.profile_name},
+            headers=headers,
+            timeout=30.0,
+        )
+        switch_response.raise_for_status()
+    except httpx.HTTPStatusError as e:
+        logger.error(
+            'Agent server returned error during switch_profile: '
+            f'{e.response.status_code} - {e.response.text}'
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f'Agent server error: {e.response.status_code}',
+        )
+    except httpx.RequestError as e:
+        logger.error(f'Failed to reach agent server during switch_profile: {e}')
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail='Failed to reach agent server.',
+        )
+
+    return Success()
 
 
 async def _finalize_sandbox_delete(
