@@ -69,15 +69,6 @@ export const askV1Agent = async (
 };
 
 /**
- * Switch the running V1 conversation's LLM profile via the app-server proxy
- */
-export const switchV1Profile = async (
-  conversationId: string,
-  profileName: string,
-): Promise<void> =>
-  V1ConversationService.switchProfile(conversationId, profileName);
-
-/**
  * Resumes a V1 conversation sandbox by fetching the sandbox_id and resuming it
  */
 export const resumeV1ConversationSandbox = async (conversationId: string) => {

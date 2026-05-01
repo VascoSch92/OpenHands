@@ -237,8 +237,8 @@ class V1ConversationService {
   /**
    * Switch the running conversation's LLM to a saved profile.
    * Goes through the app-server proxy, which loads the profile from user
-   * settings (with api_key), pushes it into the sandbox's profile dir, and
-   * then asks the agent-server to swap.
+   * settings (with api_key) and hands the LLM to the agent-server's
+   * `switch_llm` endpoint.
    */
   static async switchProfile(
     conversationId: string,

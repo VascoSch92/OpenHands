@@ -4,8 +4,12 @@ import type { LlmProfileSummary } from "#/api/settings-service/profiles-service.
 
 export interface ModelListEntry {
   id: string;
+  /**
+   * Id of the chat event after which this entry should render, or `null` to
+   * pin it to the top of the chat history (no events at the time of /model).
+   */
+  anchorEventId: string | null;
   profiles: LlmProfileSummary[];
-  activeProfile: string | null;
 }
 
 interface ModelState {
@@ -15,46 +19,27 @@ interface ModelState {
 interface ModelActions {
   show: (
     conversationId: string,
+    anchorEventId: string | null,
     profiles: LlmProfileSummary[],
-    activeProfile: string | null,
   ) => void;
-  dismiss: (conversationId: string, id: string) => void;
 }
 
 type ModelStore = ModelState & ModelActions;
 
-const initialState: ModelState = { entriesByConversation: {} };
-
-const updateEntries = (
-  state: ModelState,
-  conversationId: string,
-  updater: (entries: ModelListEntry[]) => ModelListEntry[],
-): Pick<ModelState, "entriesByConversation"> => ({
-  entriesByConversation: {
-    ...state.entriesByConversation,
-    [conversationId]: updater(
-      state.entriesByConversation[conversationId] ?? [],
-    ),
-  },
-});
-
 export const useModelStore = create<ModelStore>()(
   devtools(
     (set) => ({
-      ...initialState,
-      show: (conversationId, profiles, activeProfile) =>
-        set((s) =>
-          updateEntries(s, conversationId, (entries) => [
-            ...entries,
-            { id: crypto.randomUUID(), profiles, activeProfile },
-          ]),
-        ),
-      dismiss: (conversationId, id) =>
-        set((s) =>
-          updateEntries(s, conversationId, (entries) =>
-            entries.filter((e) => e.id !== id),
-          ),
-        ),
+      entriesByConversation: {},
+      show: (conversationId, anchorEventId, profiles) =>
+        set((s) => ({
+          entriesByConversation: {
+            ...s.entriesByConversation,
+            [conversationId]: [
+              ...(s.entriesByConversation[conversationId] ?? []),
+              { id: crypto.randomUUID(), anchorEventId, profiles },
+            ],
+          },
+        })),
     }),
     { name: "ModelStore" },
   ),

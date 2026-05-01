@@ -1,6 +1,8 @@
 """Sandboxed Conversation router for OpenHands App Server."""
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import sys
@@ -80,9 +82,9 @@ from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.app_server.utils.docker_utils import (
     replace_localhost_hostname_for_docker,
 )
+from openhands.app_server.utils.llm import resolve_llm_base_url
 from openhands.sdk.skills import KeywordTrigger, TaskTrigger
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
-from openhands.utils.llm import resolve_llm_base_url
 
 # Handle anext compatibility for Python < 3.10
 if sys.version_info >= (3, 10):
@@ -559,12 +561,6 @@ async def send_message_to_conversation(
     )
 
 
-# Path inside the sandbox where the SDK's LLMProfileStore reads from.
-# Mirrors `Path.home() / ".openhands/profiles"` resolved against the
-# agent-server's runtime user (root in the standard images).
-_SANDBOX_PROFILE_DIR = '/root/.openhands/profiles'
-
-
 @router.post(
     '/{conversation_id}/switch_profile',
     responses={
@@ -580,17 +576,18 @@ async def switch_conversation_profile(
     app_conversation_service: AppConversationService = (
         app_conversation_service_dependency
     ),
+    app_conversation_info_service: AppConversationInfoService = (
+        app_conversation_info_service_dependency
+    ),
     sandbox_service: SandboxService = sandbox_service_dependency,
     sandbox_spec_service: SandboxSpecService = sandbox_spec_service_dependency,
     httpx_client: httpx.AsyncClient = httpx_client_dependency,
 ) -> Success:
     """Switch the running conversation's LLM to a saved profile.
 
-    The agent-server's ``switch_profile`` endpoint reads the profile from a
-    sandbox-local FS directory; the user's saved profiles live on the
-    app-server side. This endpoint bridges the two: it materializes the
-    profile JSON into the sandbox's profile dir, then asks the agent-server
-    to swap.
+    Profiles live in the app-server's user settings, not on the sandbox FS,
+    so we resolve the profile here and hand the LLM directly to the
+    agent-server's ``switch_llm`` endpoint.
     """
     if user_settings is None:
         raise HTTPException(
@@ -617,6 +614,36 @@ async def switch_conversation_profile(
         }
     )
 
+    # The agent-server's LLM registry is first-write-wins by ``usage_id``:
+    # ``switch_llm`` returns the cached entry under that key and silently
+    # drops the incoming LLM. So:
+    #   - Two saved profiles that share the default ``usage_id="default"``
+    #     would no-op after the first switch (the second profile is dropped
+    #     and the agent keeps using the first).
+    #   - Editing a profile (e.g. swapping its model) wouldn't take effect
+    #     on subsequent switches because the registry still holds the
+    #     pre-edit LLM under the old slot.
+    # Both manifest as "I switched profiles but the request still goes out
+    # with the old model" (often surfacing as upstream "Invalid model name"
+    # errors when the cached model has been removed from the user's quota).
+    #
+    # Derive ``usage_id`` from the profile name + a hash of the resolved
+    # LLM payload. Identical snapshots dedupe in the registry; any change
+    # (model, base_url, api_key, etc.) produces a fresh slot so the swap
+    # actually lands.
+    fingerprint = profile_llm.model_dump(
+        mode='json',
+        exclude={'usage_id'},
+        exclude_none=True,
+        context={'expose_secrets': True},
+    )
+    content_hash = hashlib.sha1(
+        json.dumps(fingerprint, sort_keys=True, default=str).encode('utf-8'),
+    ).hexdigest()[:12]
+    profile_llm = profile_llm.model_copy(
+        update={'usage_id': f'profile:{request.profile_name}:{content_hash}'},
+    )
+
     ctx = await _get_agent_server_context(
         conversation_id,
         app_conversation_service,
@@ -635,40 +662,38 @@ async def switch_conversation_profile(
             detail='Sandbox is paused; resume it before switching profiles.',
         )
 
-    profile_json = profile_llm.model_dump_json(
+    llm_payload = profile_llm.model_dump(
+        mode='json',
         exclude_none=True,
-        indent=2,
         context={'expose_secrets': True},
     )
     headers = {'X-Session-API-Key': ctx.session_api_key} if ctx.session_api_key else {}
-    profile_path = f'{_SANDBOX_PROFILE_DIR}/{request.profile_name}.json'
 
     try:
-        upload_response = await httpx_client.post(
-            f'{ctx.agent_server_url}/api/file/upload',
-            params={'path': profile_path},
-            files={
-                'file': (
-                    f'{request.profile_name}.json',
-                    profile_json.encode('utf-8'),
-                    'application/json',
-                ),
-            },
-            headers=headers,
-            timeout=30.0,
-        )
-        upload_response.raise_for_status()
-
         switch_response = await httpx_client.post(
-            f'{ctx.agent_server_url}/api/conversations/{conversation_id}/switch_profile',
-            json={'profile_name': request.profile_name},
+            f'{ctx.agent_server_url}/api/conversations/{conversation_id}/switch_llm',
+            json={'llm': llm_payload},
             headers=headers,
             timeout=30.0,
         )
         switch_response.raise_for_status()
+        # Surface a success line so operators can confirm the swap landed
+        # without grepping for the absence of an error. ``usage_id`` is the
+        # registry key — different value across calls means the cache was
+        # busted and a fresh LLM is in use; identical value means a cache
+        # hit (intended for unchanged profiles).
+        logger.info(
+            'Switched conversation %s to profile %r '
+            '(model=%s, base_url=%s, usage_id=%s)',
+            conversation_id,
+            request.profile_name,
+            profile_llm.model,
+            profile_llm.base_url,
+            profile_llm.usage_id,
+        )
     except httpx.HTTPStatusError as e:
         logger.error(
-            'Agent server returned error during switch_profile: '
+            'Agent server returned error during switch_llm: '
             f'{e.response.status_code} - {e.response.text}'
         )
         raise HTTPException(
@@ -676,10 +701,28 @@ async def switch_conversation_profile(
             detail=f'Agent server error: {e.response.status_code}',
         )
     except httpx.RequestError as e:
-        logger.error(f'Failed to reach agent server during switch_profile: {e}')
+        logger.error(f'Failed to reach agent server during switch_llm: {e}')
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail='Failed to reach agent server.',
+        )
+
+    # Persist the new model on the conversation record so the chat header
+    # (and other callers that read ``conversation.llm_model``) reflect the
+    # swap on the next fetch. Best-effort: a save failure is logged but
+    # does not undo the switch the agent-server already accepted.
+    try:
+        info = await app_conversation_info_service.get_app_conversation_info(
+            conversation_id,
+        )
+        if info is not None and info.llm_model != profile_llm.model:
+            info.llm_model = profile_llm.model
+            await app_conversation_info_service.save_app_conversation_info(info)
+    except Exception:
+        logger.exception(
+            'Failed to persist new llm_model on conversation %s after profile '
+            'switch — header may be stale until the next refresh.',
+            conversation_id,
         )
 
     return Success()
