@@ -104,7 +104,7 @@ export const BUILT_IN_COMMANDS: SlashCommandItem[] = [
       name: "model",
       type: "agentskills",
       content:
-        "List saved LLM profiles, or switch the conversation to /model <name>",
+        "List saved LLM profiles, or switch the conversation LLM profile with /model <name>",
       triggers: [MODEL_COMMAND],
     },
     command: MODEL_COMMAND,
