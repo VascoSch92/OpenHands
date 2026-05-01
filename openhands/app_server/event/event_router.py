@@ -14,11 +14,11 @@ from openhands.agent_server.models import EventPage, EventSortOrder
 from openhands.app_server.config import depends_event_service, get_global_config
 from openhands.app_server.event.event_service import EventService
 from openhands.app_server.event_callback.event_callback_models import EventKind
-from openhands.app_server.sandbox.sandbox_models import AGENT_SERVER, SandboxStatus
-from openhands.app_server.utils.dependencies import get_dependencies
-from openhands.app_server.utils.docker_utils import (
-    replace_localhost_hostname_for_docker,
+from openhands.app_server.event_callback.util import (
+    ensure_running_sandbox,
+    get_agent_server_url_from_sandbox,
 )
+from openhands.app_server.utils.dependencies import get_dependencies
 from openhands.sdk import Event
 
 logger = logging.getLogger(__name__)
@@ -164,23 +164,14 @@ async def stream_events(
         await websocket.close(code=4401, reason='Authorization failed')
         return
 
-    if not sandbox or sandbox.status != SandboxStatus.RUNNING:
-        await websocket.close(code=4003, reason='Sandbox not running')
+    try:
+        sandbox = ensure_running_sandbox(sandbox, str(conversation.sandbox_id))
+        agent_server_url = get_agent_server_url_from_sandbox(sandbox)
+    except RuntimeError as exc:
+        await websocket.close(code=4003, reason=str(exc))
         return
+    assert sandbox.session_api_key is not None  # ensure_running_sandbox guarantees this
 
-    agent_server_url = next(
-        (
-            exposed_url.url
-            for exposed_url in (sandbox.exposed_urls or [])
-            if exposed_url.name == AGENT_SERVER
-        ),
-        None,
-    )
-    if not agent_server_url:
-        await websocket.close(code=4003, reason='Agent server URL unavailable')
-        return
-
-    agent_server_url = replace_localhost_hostname_for_docker(agent_server_url)
     ws_base = (
         agent_server_url.replace('https://', 'wss://', 1)
         .replace('http://', 'ws://', 1)
@@ -196,13 +187,10 @@ async def stream_events(
     if qs:
         upstream_url = f'{upstream_url}?{urlencode(qs)}'
 
-    additional_headers: dict[str, str] = {}
-    if sandbox.session_api_key:
-        additional_headers['X-Session-API-Key'] = sandbox.session_api_key
-
     try:
         upstream = await websockets.connect(
-            upstream_url, additional_headers=additional_headers
+            upstream_url,
+            additional_headers={'X-Session-API-Key': sandbox.session_api_key},
         )
     except Exception:
         logger.exception('event_stream_upstream_connect_failed')

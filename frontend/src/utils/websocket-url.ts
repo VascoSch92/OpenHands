@@ -66,31 +66,6 @@ export function buildHttpBaseUrl(
 }
 
 /**
- * Builds the WebSocket URL for V1 conversations (without query params)
- * @param conversationId The conversation ID
- * @param conversationUrl The conversation URL containing host/port (e.g., "http://localhost:3000/api/conversations/123")
- * @returns WebSocket URL or null if inputs are invalid
- */
-export function buildWebSocketUrl(
-  conversationId: string | undefined,
-  conversationUrl: string | null | undefined,
-): string | null {
-  if (!conversationId) {
-    return null;
-  }
-
-  const baseHost = extractBaseHost(conversationUrl);
-  const pathPrefix = extractPathPrefix(conversationUrl);
-
-  // Build WebSocket URL: ws://host:port[/path-prefix]/sockets/events/{conversationId}
-  // The path prefix (e.g., /runtime/55313) is needed for proxy deployments
-  // Note: Query params should be passed via the useWebSocket hook options
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-
-  return `${protocol}//${baseHost}${pathPrefix}/sockets/events/${conversationId}`;
-}
-
-/**
  * Builds the WebSocket URL for the app-server event stream proxy.
  * The proxy authenticates via the existing app cookie and forwards to the
  * sandbox agent server on the backend, so the browser does not need the

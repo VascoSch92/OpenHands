@@ -827,7 +827,6 @@ export function ConversationWebSocketProvider({
     handlePlanningMessage,
     setErrorMessage,
     removeErrorMessage,
-    sessionApiKey,
     subConversations,
   ]);
 
