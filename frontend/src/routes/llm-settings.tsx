@@ -481,8 +481,8 @@ export function LlmSettingsScreen({
     setShowProfiles(true);
   }, [activateProfile, profileName, saveProfile, scope]);
 
-  const openForm = (view: SettingsView | null) => {
-    setProfileName("");
+  const openForm = (view: SettingsView | null, name = "") => {
+    setProfileName(name);
     setInitialViewHint(view);
     setShowProfiles(false);
   };
@@ -491,7 +491,7 @@ export function LlmSettingsScreen({
     return (
       <LlmProfilesManager
         onAddProfile={() => openForm(null)}
-        onEditProfile={() => openForm(null)}
+        onEditProfile={(profile) => openForm(null, profile.name)}
       />
     );
   }
