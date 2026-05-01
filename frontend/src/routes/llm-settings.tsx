@@ -29,6 +29,7 @@ import {
 import { DEFAULT_SETTINGS } from "#/services/settings";
 import { useSaveLlmProfile } from "#/hooks/mutation/use-save-llm-profile";
 import { useActivateLlmProfile } from "#/hooks/mutation/use-activate-llm-profile";
+import { useRenameLlmProfile } from "#/hooks/mutation/use-rename-llm-profile";
 import {
   deriveProfileNameFromModel,
   PROFILE_NAME_PATTERN,
@@ -143,6 +144,7 @@ export function LlmSettingsScreen({
   const lastSavedModelRef = React.useRef<string | null>(null);
   const saveProfile = useSaveLlmProfile();
   const activateProfile = useActivateLlmProfile();
+  const renameProfile = useRenameLlmProfile();
 
   // Controls whether the LLM form or the Profiles list is shown. Flipping
   // this unmounts the inactive branch, so the SdkSectionPage re-hydrates
@@ -154,6 +156,10 @@ export function LlmSettingsScreen({
   // in handleSaveSuccess. Reset on every form open so a stale name from the
   // previous Add doesn't leak in.
   const [profileName, setProfileName] = React.useState("");
+  // Snapshotted on form open so we can flag the form dirty when the user
+  // edits *only* the name — the SDK section page tracks the LLM fields but
+  // not the profile-name input that lives outside its schema.
+  const [initialProfileName, setInitialProfileName] = React.useState("");
   // When the user clicks Basic / Advanced / All from inside the profiles
   // view, we want the LLM form to open on *that* tier — not whatever the
   // schema happened to infer. We stash the choice here and consume it in
@@ -462,6 +468,15 @@ export function LlmSettingsScreen({
     // LLM settings reuse this screen but shouldn't spawn per-user profiles.
     if (scope !== "org" && name) {
       try {
+        // Editing an existing profile and renaming it via the form should
+        // rename the record in place rather than spawning a new one and
+        // leaving the original orphaned.
+        if (initialProfileName && initialProfileName !== name) {
+          await renameProfile.mutateAsync({
+            name: initialProfileName,
+            newName: name,
+          });
+        }
         // Omit `llm` → backend snapshots the just-saved agent_settings.llm
         // (api_key and all). Saves us from having to hand-reconstruct the
         // config and risk mangling the secret placeholder handling.
@@ -477,12 +492,21 @@ export function LlmSettingsScreen({
     }
 
     setProfileName("");
+    setInitialProfileName("");
     setInitialViewHint(null);
     setShowProfiles(true);
-  }, [activateProfile, profileName, saveProfile, scope]);
+  }, [
+    activateProfile,
+    initialProfileName,
+    profileName,
+    renameProfile,
+    saveProfile,
+    scope,
+  ]);
 
-  const openForm = (view: SettingsView | null) => {
-    setProfileName("");
+  const openForm = (view: SettingsView | null, name = "") => {
+    setProfileName(name);
+    setInitialProfileName(name);
     setInitialViewHint(view);
     setShowProfiles(false);
   };
@@ -491,7 +515,7 @@ export function LlmSettingsScreen({
     return (
       <LlmProfilesManager
         onAddProfile={() => openForm(null)}
-        onEditProfile={() => openForm(null)}
+        onEditProfile={(profile) => openForm(null, profile.name)}
       />
     );
   }
@@ -508,7 +532,7 @@ export function LlmSettingsScreen({
           setInitialViewHint(null);
           setShowProfiles(true);
         }}
-        className="flex items-center gap-2 self-start text-sm text-gray-300 hover:text-white"
+        className="flex items-center gap-2 self-start text-sm text-gray-300 hover:text-white cursor-pointer"
       >
         <FaChevronLeft size={12} aria-hidden="true" />
         {t(I18nKey.SETTINGS$BACK_TO_LLM_LIST)}
@@ -524,6 +548,7 @@ export function LlmSettingsScreen({
         excludeKeys={LLM_EXCLUDED_KEYS}
         header={buildHeader}
         buildPayload={buildPayload}
+        extraDirty={profileName.trim() !== initialProfileName.trim()}
         onSaveSuccess={handleSaveSuccess}
         getInitialView={getInitialView}
         forceShowAdvancedView
