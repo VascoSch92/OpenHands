@@ -174,7 +174,7 @@ describe("LlmProfilesManager", () => {
     expect(otherRow).not.toHaveTextContent("SETTINGS$PROFILE_ACTIVE_BADGE");
   });
 
-  it("opens the three-dot menu and fires onEditProfile on Edit (activating first if inactive)", async () => {
+  it("fires onEditProfile on Edit without activating the profile (inactive row)", async () => {
     profilesState.data = sampleProfiles;
     const onEditProfile = vi.fn();
     renderManager({ onEditProfile });
@@ -184,13 +184,14 @@ describe("LlmProfilesManager", () => {
     await user.click(screen.getAllByTestId("profile-menu-trigger")[1]);
     await user.click(screen.getByTestId("profile-edit"));
 
-    // Edit on an inactive profile should activate it before opening the form.
-    expect(activateMock).toHaveBeenCalledWith("anthropic_claude");
+    // Edit must not activate the profile — activation is reserved for the
+    // explicit "Set as active" action and the post-save flow.
+    expect(activateMock).not.toHaveBeenCalled();
     expect(onEditProfile).toHaveBeenCalledTimes(1);
     expect(onEditProfile).toHaveBeenCalledWith(sampleProfiles.profiles[1]);
   });
 
-  it("does not re-activate the current profile when Edit is clicked on the active row", async () => {
+  it("does not activate the profile when Edit is clicked on the active row", async () => {
     profilesState.data = sampleProfiles;
     const onEditProfile = vi.fn();
     renderManager({ onEditProfile });
