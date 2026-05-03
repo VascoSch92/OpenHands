@@ -3,6 +3,7 @@ import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { ProfileRow } from "#/components/features/settings/profile-row";
 import { LlmProfileSummary } from "#/api/settings-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
+import { Typography } from "#/ui/typography";
 
 interface ProfilesBodyProps {
   isLoading: boolean;
@@ -38,16 +39,16 @@ export function ProfilesBody({
   }
   if (loadError) {
     return (
-      <p className="text-sm text-red-400">
+      <Typography.Paragraph className="text-sm text-red-400">
         {t(I18nKey.SETTINGS$PROFILES_LOAD_ERROR)}
-      </p>
+      </Typography.Paragraph>
     );
   }
   if (profiles.length === 0) {
     return (
-      <p className="text-sm text-gray-400 italic">
+      <Typography.Paragraph className="text-sm text-gray-400 italic">
         {t(I18nKey.SETTINGS$PROFILES_EMPTY)}
-      </p>
+      </Typography.Paragraph>
     );
   }
   return (

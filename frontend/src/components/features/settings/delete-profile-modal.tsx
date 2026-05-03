@@ -7,6 +7,7 @@ import { useDeleteLlmProfile } from "#/hooks/mutation/use-delete-llm-profile";
 import { mutateWithToast } from "#/utils/mutate-with-toast";
 import { extractErrorMessage } from "#/utils/extract-error-message";
 import { I18nKey } from "#/i18n/declaration";
+import { Typography } from "#/ui/typography";
 
 interface DeleteProfileModalProps {
   profile: LlmProfileSummary | null;
@@ -64,11 +65,11 @@ export function DeleteProfileModal({
       title={t(I18nKey.SETTINGS$PROFILE_DELETE_TITLE)}
       footer={footer}
     >
-      <p className="text-sm break-all">
+      <Typography.Paragraph className="text-sm break-all">
         {t(I18nKey.SETTINGS$PROFILE_DELETE_CONFIRMATION, {
           name: profile.name,
         })}
-      </p>
+      </Typography.Paragraph>
     </ApiKeyModalBase>
   );
 }
