@@ -11,6 +11,7 @@ import { SettingsInput } from "#/components/features/settings/settings-input";
 import { HelpLink } from "#/ui/help-link";
 import { useConfig } from "#/hooks/query/use-config";
 import { KeyStatusIcon } from "#/components/features/settings/key-status-icon";
+import { OpenHandsApiKeyHelp } from "#/components/features/settings/openhands-api-key-help";
 import {
   SdkSectionHeaderProps,
   SdkSectionPage,
@@ -89,37 +90,6 @@ const isProviderDefaultBaseUrl = (model: string, baseUrl: string) => {
     knownDefaults?.has(normalizedBaseUrl),
   );
 };
-
-interface OpenHandsApiKeyHelpProps {
-  testId: string;
-}
-
-function OpenHandsApiKeyHelp({ testId }: OpenHandsApiKeyHelpProps) {
-  const { t } = useTranslation();
-
-  return (
-    <>
-      <HelpLink
-        testId={testId}
-        text={t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_TEXT)}
-        linkText={t(I18nKey.SETTINGS$NAV_API_KEYS)}
-        href="https://app.all-hands.dev/settings/api-keys"
-        suffix={` ${t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_SUFFIX)}`}
-      />
-      <p className="text-xs">
-        {t(I18nKey.SETTINGS$LLM_BILLING_INFO)}{" "}
-        <a
-          href="https://docs.openhands.dev/usage/llms/openhands-llms"
-          rel="noreferrer noopener"
-          target="_blank"
-          className="underline underline-offset-2"
-        >
-          {t(I18nKey.SETTINGS$SEE_PRICING_DETAILS)}
-        </a>
-      </p>
-    </>
-  );
-}
 
 export function LlmSettingsScreen({
   scope = "personal",
