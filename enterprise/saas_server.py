@@ -8,6 +8,10 @@ load_dotenv()
 if not os.getenv('OPENHANDS_CONFIG_CLS'):
     os.environ['OPENHANDS_CONFIG_CLS'] = 'server.config.SaaSServerConfig'
 
+# SaaS registers enterprise routes below, then mounts the frontend last. Avoid
+# the base app's import-time SPA mount from shadowing those routes.
+os.environ['SERVE_FRONTEND'] = 'false'
+
 from fastapi import Request, status  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
@@ -57,11 +61,11 @@ from server.verified_models.verified_model_router import (  # noqa: E402
     api_router as verified_models_router,
 )
 
-from openhands.server.app import app as base_app  # noqa: E402
-from openhands.server.middleware import (  # noqa: E402
+from openhands.app_server.app import app as base_app  # noqa: E402
+from openhands.app_server.middleware import (  # noqa: E402
     CacheControlMiddleware,
 )
-from openhands.server.static import SPAStaticFiles  # noqa: E402
+from openhands.app_server.static import SPAStaticFiles  # noqa: E402
 
 directory = os.getenv('FRONTEND_DIRECTORY', './frontend/build')
 
