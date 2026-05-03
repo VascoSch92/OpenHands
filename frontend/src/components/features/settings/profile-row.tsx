@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ProfileActionsMenu } from "#/components/features/settings/profile-actions-menu";
 import { LlmProfileSummary } from "#/api/settings-service/profiles-service.api";
 import { I18nKey } from "#/i18n/declaration";
+import { Typography } from "#/ui/typography";
 import ThreeDotsVerticalIcon from "#/icons/three-dots-vertical.svg?react";
 
 interface ProfileRowProps {
@@ -33,27 +34,27 @@ export function ProfileRow({
       className="flex items-center justify-between gap-3 px-5 py-4"
     >
       <div className="flex flex-col gap-1 min-w-0 flex-1 sm:flex-row sm:items-center sm:gap-3">
-        <span
+        <Typography.Text
           className="font-medium text-white truncate min-w-0 max-w-full"
           title={profile.name}
         >
           {profile.name}
-        </span>
+        </Typography.Text>
         {profile.model ? (
-          <span
+          <Typography.Text
             className="text-sm text-gray-400 truncate min-w-0 max-w-full"
             title={profile.model}
           >
             {profile.model}
-          </span>
+          </Typography.Text>
         ) : null}
         {isActive && (
-          <span
+          <Typography.Text
             className="text-xs bg-primary text-[#0D0F11] font-semibold rounded-full px-2 py-0.5 whitespace-nowrap self-start sm:self-auto"
-            data-testid="profile-active-badge"
+            testId="profile-active-badge"
           >
             {t(I18nKey.SETTINGS$PROFILE_ACTIVE_BADGE)}
-          </span>
+          </Typography.Text>
         )}
       </div>
       <div className="relative shrink-0">
