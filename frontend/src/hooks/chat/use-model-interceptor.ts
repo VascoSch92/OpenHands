@@ -2,13 +2,12 @@ import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import ProfilesService from "#/api/settings-service/profiles-service.api";
-import { shouldRenderEvent as shouldRenderV1Event } from "#/components/v1/chat";
+import { getRenderedV1Events } from "#/components/v1/chat";
 import { useSwitchLlmProfile } from "#/hooks/mutation/use-switch-llm-profile";
 import { LLM_PROFILES_QUERY_KEY } from "#/hooks/query/use-llm-profiles";
 import { I18nKey } from "#/i18n/declaration";
 import { useEventStore } from "#/stores/use-event-store";
 import { useModelStore } from "#/stores/model-store";
-import { isV1Event } from "#/types/v1/type-guards";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { MODEL_COMMAND } from "#/utils/constants";
 
@@ -44,14 +43,13 @@ export const useModelInterceptor = (
 
       // Anchor entries to the latest v1 event so they render inline at the
       // chat position where the user typed /model, instead of always at the
-      // bottom of the chat history. Apply the same filter chain as
-      // `useFilteredEvents` so we only anchor to events that are actually
-      // rendered — anchoring to a hidden event (e.g. ConversationStateUpdate)
-      // would leave the entry with no slot to mount in.
-      const renderedEvents = useEventStore
-        .getState()
-        .uiEvents.filter(isV1Event)
-        .filter(shouldRenderV1Event);
+      // bottom of the chat history. Use the shared `getRenderedV1Events` so
+      // we only anchor to events that are actually rendered — anchoring to a
+      // hidden event (e.g. ConversationStateUpdate) would leave the entry
+      // with no slot to mount in.
+      const renderedEvents = getRenderedV1Events(
+        useEventStore.getState().uiEvents,
+      );
       const anchorEventId =
         renderedEvents.length > 0
           ? String(renderedEvents[renderedEvents.length - 1].id)
