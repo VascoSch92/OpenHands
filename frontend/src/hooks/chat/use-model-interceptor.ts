@@ -1,9 +1,10 @@
 import { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import V1ConversationService from "#/api/conversation-service/v1-conversation-service.api";
 import ProfilesService from "#/api/settings-service/profiles-service.api";
 import { shouldRenderEvent as shouldRenderV1Event } from "#/components/v1/chat";
+import { useSwitchLlmProfile } from "#/hooks/mutation/use-switch-llm-profile";
+import { LLM_PROFILES_QUERY_KEY } from "#/hooks/query/use-llm-profiles";
 import { I18nKey } from "#/i18n/declaration";
 import { useEventStore } from "#/stores/use-event-store";
 import { useModelStore } from "#/stores/model-store";
@@ -26,6 +27,7 @@ export const useModelInterceptor = (
   const showProfiles = useModelStore((s) => s.show);
   const recordSwitch = useModelStore((s) => s.recordSwitch);
   const queryClient = useQueryClient();
+  const { mutate: switchLlmProfile } = useSwitchLlmProfile();
   const { t } = useTranslation();
 
   return useCallback(
@@ -56,7 +58,16 @@ export const useModelInterceptor = (
           : null;
 
       if (!arg) {
-        ProfilesService.listProfiles()
+        // Imperative fetch through the query cache so the result populates
+        // the same key `useLlmProfiles` reads, and a recently-fetched list
+        // is reused. `staleTime: 0` forces a fresh fetch each time the user
+        // explicitly asks via /model.
+        queryClient
+          .fetchQuery({
+            queryKey: [LLM_PROFILES_QUERY_KEY],
+            queryFn: ProfilesService.listProfiles,
+            staleTime: 0,
+          })
           .then(({ profiles }) =>
             showProfiles(conversationId, anchorEventId, profiles),
           )
@@ -66,24 +77,31 @@ export const useModelInterceptor = (
         return;
       }
 
-      V1ConversationService.switchProfile(conversationId, arg)
-        .then(() => {
-          recordSwitch(conversationId, anchorEventId, arg);
-          // Refetch the conversation so the chat header (and anything else
-          // reading `conversation.llm_model`) picks up the new model. The
-          // backend persisted it as part of the switch.
-          queryClient.invalidateQueries({
-            queryKey: ["user", "conversation", conversationId],
-          });
-        })
-        .catch((err) =>
-          displayErrorToast(
-            err?.response?.data?.detail ??
-              err?.message ??
-              t(I18nKey.MODEL$SWITCH_FAILED, { name: arg }),
-          ),
-        );
+      switchLlmProfile(
+        { conversationId, profileName: arg },
+        {
+          onSuccess: () => recordSwitch(conversationId, anchorEventId, arg),
+          onError: (err: unknown) => {
+            const e = err as
+              | { response?: { data?: { detail?: string } }; message?: string }
+              | undefined;
+            displayErrorToast(
+              e?.response?.data?.detail ??
+                e?.message ??
+                t(I18nKey.MODEL$SWITCH_FAILED, { name: arg }),
+            );
+          },
+        },
+      );
     },
-    [conversationId, onSubmit, showProfiles, recordSwitch, queryClient, t],
+    [
+      conversationId,
+      onSubmit,
+      showProfiles,
+      recordSwitch,
+      queryClient,
+      switchLlmProfile,
+      t,
+    ],
   );
 };

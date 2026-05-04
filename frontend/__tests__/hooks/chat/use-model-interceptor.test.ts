@@ -148,10 +148,11 @@ describe("useModelInterceptor", () => {
 
     act(() => result.current("/model gpt-5"));
 
-    expect(mockSwitchProfile).toHaveBeenCalledWith(CONV, "gpt-5");
+    await waitFor(() =>
+      expect(mockSwitchProfile).toHaveBeenCalledWith(CONV, "gpt-5"),
+    );
     // No success toast — the chat info block (recorded in the store) is the
     // sole user-visible confirmation; toast would be redundant.
-    await waitFor(() => expect(mockSwitchProfile).toHaveBeenCalled());
     expect(mockDisplaySuccessToast).not.toHaveBeenCalled();
   });
 
