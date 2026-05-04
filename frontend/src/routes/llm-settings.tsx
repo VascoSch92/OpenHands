@@ -37,6 +37,7 @@ import {
 } from "#/utils/derive-profile-name";
 import { LlmProfilesManager } from "#/components/features/settings/llm-profiles-manager";
 import { ProfileNameInput } from "#/components/features/settings/profile-name-input";
+import { Typography } from "#/ui/typography";
 
 const LLM_EXCLUDED_KEYS = new Set(["llm.model", "llm.api_key", "llm.base_url"]);
 
@@ -273,12 +274,12 @@ export function LlmSettingsScreen({
       return (
         <div className="flex flex-col gap-6">
           {infoMessageKey ? (
-            <p
-              data-testid="llm-settings-info-message"
+            <Typography.Paragraph
+              testId="llm-settings-info-message"
               className="text-sm text-tertiary-alt"
             >
               {t(infoMessageKey)}
-            </p>
+            </Typography.Paragraph>
           ) : null}
 
           {scope === "personal" ? (

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { HelpLink } from "#/ui/help-link";
 import { I18nKey } from "#/i18n/declaration";
+import { Typography } from "#/ui/typography";
 
 interface OpenHandsApiKeyHelpProps {
   testId: string;
@@ -18,7 +19,7 @@ export function OpenHandsApiKeyHelp({ testId }: OpenHandsApiKeyHelpProps) {
         href="https://app.all-hands.dev/settings/api-keys"
         suffix={` ${t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_SUFFIX)}`}
       />
-      <p className="text-xs">
+      <Typography.Paragraph className="text-xs">
         {t(I18nKey.SETTINGS$LLM_BILLING_INFO)}{" "}
         <a
           href="https://docs.openhands.dev/usage/llms/openhands-llms"
@@ -28,7 +29,7 @@ export function OpenHandsApiKeyHelp({ testId }: OpenHandsApiKeyHelpProps) {
         >
           {t(I18nKey.SETTINGS$SEE_PRICING_DETAILS)}
         </a>
-      </p>
+      </Typography.Paragraph>
     </>
   );
 }
