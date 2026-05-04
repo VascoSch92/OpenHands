@@ -11,6 +11,7 @@ import { SettingsInput } from "#/components/features/settings/settings-input";
 import { HelpLink } from "#/ui/help-link";
 import { useConfig } from "#/hooks/query/use-config";
 import { KeyStatusIcon } from "#/components/features/settings/key-status-icon";
+import { OpenHandsApiKeyHelp } from "#/components/features/settings/openhands-api-key-help";
 import {
   SdkSectionHeaderProps,
   SdkSectionPage,
@@ -36,6 +37,7 @@ import {
 } from "#/utils/derive-profile-name";
 import { LlmProfilesManager } from "#/components/features/settings/llm-profiles-manager";
 import { ProfileNameInput } from "#/components/features/settings/profile-name-input";
+import { Typography } from "#/ui/typography";
 
 const LLM_EXCLUDED_KEYS = new Set(["llm.model", "llm.api_key", "llm.base_url"]);
 
@@ -89,37 +91,6 @@ const isProviderDefaultBaseUrl = (model: string, baseUrl: string) => {
     knownDefaults?.has(normalizedBaseUrl),
   );
 };
-
-interface OpenHandsApiKeyHelpProps {
-  testId: string;
-}
-
-function OpenHandsApiKeyHelp({ testId }: OpenHandsApiKeyHelpProps) {
-  const { t } = useTranslation();
-
-  return (
-    <>
-      <HelpLink
-        testId={testId}
-        text={t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_TEXT)}
-        linkText={t(I18nKey.SETTINGS$NAV_API_KEYS)}
-        href="https://app.all-hands.dev/settings/api-keys"
-        suffix={` ${t(I18nKey.SETTINGS$OPENHANDS_API_KEY_HELP_SUFFIX)}`}
-      />
-      <p className="text-xs">
-        {t(I18nKey.SETTINGS$LLM_BILLING_INFO)}{" "}
-        <a
-          href="https://docs.openhands.dev/usage/llms/openhands-llms"
-          rel="noreferrer noopener"
-          target="_blank"
-          className="underline underline-offset-2"
-        >
-          {t(I18nKey.SETTINGS$SEE_PRICING_DETAILS)}
-        </a>
-      </p>
-    </>
-  );
-}
 
 export function LlmSettingsScreen({
   scope = "personal",
@@ -303,12 +274,12 @@ export function LlmSettingsScreen({
       return (
         <div className="flex flex-col gap-6">
           {infoMessageKey ? (
-            <p
-              data-testid="llm-settings-info-message"
+            <Typography.Paragraph
+              testId="llm-settings-info-message"
               className="text-sm text-tertiary-alt"
             >
               {t(infoMessageKey)}
-            </p>
+            </Typography.Paragraph>
           ) : null}
 
           {scope === "personal" ? (

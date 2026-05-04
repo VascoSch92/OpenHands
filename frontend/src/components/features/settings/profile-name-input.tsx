@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { SettingsInput } from "#/components/features/settings/settings-input";
 import { I18nKey } from "#/i18n/declaration";
+import { Typography } from "#/ui/typography";
 import { PROFILE_NAME_PATTERN } from "#/utils/derive-profile-name";
 
 interface ProfileNameInputProps {
@@ -42,12 +43,12 @@ export function ProfileNameInput({
         onChange={onChange}
         isDisabled={isDisabled}
       />
-      <p
-        data-testid={ruleTestId}
+      <Typography.Paragraph
+        testId={ruleTestId}
         className={`text-xs ${isInvalid ? "text-red-400" : "text-gray-400"}`}
       >
         {t(I18nKey.SETTINGS$PROFILE_NAME_RULE)}
-      </p>
+      </Typography.Paragraph>
     </div>
   );
 }
