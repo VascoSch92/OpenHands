@@ -61,6 +61,7 @@ from openhands.app_server.config import (
     get_event_callback_service,
     resolve_provider_llm_base_url,
 )
+from openhands.app_server.config_api.config_models import AppMode
 from openhands.app_server.errors import SandboxError
 from openhands.app_server.event.event_service import EventService
 from openhands.app_server.event_callback.event_callback_models import EventCallback
@@ -87,9 +88,11 @@ from openhands.app_server.services.injector import InjectorState
 from openhands.app_server.services.jwt_service import JwtService
 from openhands.app_server.user.user_context import UserContext
 from openhands.app_server.user.user_models import UserInfo
+from openhands.app_server.utils._redact_compat import sanitize_config
 from openhands.app_server.utils.docker_utils import (
     replace_localhost_hostname_for_docker,
 )
+from openhands.app_server.utils.git import ensure_valid_git_branch_name
 from openhands.app_server.utils.llm_metadata import (
     get_llm_metadata,
     should_set_litellm_extra_body,
@@ -100,9 +103,9 @@ from openhands.sdk.hooks import HookConfig
 from openhands.sdk.llm import LLM
 from openhands.sdk.plugin import PluginSource
 from openhands.sdk.secret import LookupSecret, StaticSecret
+from openhands.sdk.settings import ACPAgentSettings
 from openhands.sdk.utils.paging import page_iterator
 from openhands.sdk.workspace.remote.async_remote_workspace import AsyncRemoteWorkspace
-from openhands.server.types import AppMode
 from openhands.tools.preset.default import (
     get_default_tools,
 )
@@ -110,9 +113,6 @@ from openhands.tools.preset.planning import (
     format_plan_structure,
     get_planning_tools,
 )
-from openhands.utils._redact_compat import sanitize_config
-from openhands.utils.git import ensure_valid_git_branch_name
-from openhands.utils.sdk_settings_compat import ACPAgentSettings
 
 _conversation_info_type_adapter = TypeAdapter(list[ConversationInfo | None])
 _acp_conversation_info_type_adapter = TypeAdapter(list[ACPConversationInfo | None])
@@ -130,18 +130,18 @@ def _split_ids_by_kind(
     conversation_ids: list[str],
     conversation_kind_by_id: dict[str, str],
 ) -> tuple[list[str], list[str]]:
-    """Split conversation IDs into (llm_ids, acp_ids) based on their agent_kind."""
-    llm_ids = [
+    """Split conversation IDs into (openhands_ids, acp_ids) by agent_kind."""
+    openhands_ids = [
         cid
         for cid in conversation_ids
-        if conversation_kind_by_id.get(cid, 'llm') != 'acp'
+        if conversation_kind_by_id.get(cid, 'openhands') != 'acp'
     ]
     acp_ids = [
         cid
         for cid in conversation_ids
-        if conversation_kind_by_id.get(cid, 'llm') == 'acp'
+        if conversation_kind_by_id.get(cid, 'openhands') == 'acp'
     ]
-    return llm_ids, acp_ids
+    return openhands_ids, acp_ids
 
 
 # Planning agent instruction to prevent "Ready to proceed?" behavior
@@ -381,7 +381,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 display_model = start_conversation_request.agent.acp_model
             else:
                 info = ConversationInfo.model_validate(response.json())
-                agent_kind = 'llm'
+                agent_kind = 'openhands'
                 display_model = start_conversation_request.agent.llm.model
 
             # Store info...
@@ -518,7 +518,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         conversation_kind_by_id = conversation_kind_by_id or {}
 
-        llm_ids, acp_ids = _split_ids_by_kind(conversation_ids, conversation_kind_by_id)
+        openhands_ids, acp_ids = _split_ids_by_kind(
+            conversation_ids, conversation_kind_by_id
+        )
 
         agent_server_url = self._get_agent_server_url(sandbox)
         headers: dict[str, str] = {}
@@ -527,12 +529,12 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         results: list[ConversationInfo | ACPConversationInfo] = []
 
-        # Fetch LLM conversations
-        if llm_ids:
+        # Fetch OpenHands conversations
+        if openhands_ids:
             try:
                 url = f'{agent_server_url.rstrip("/")}/api/conversations'
                 response = await self.httpx_client.get(
-                    url, params={'ids': llm_ids}, headers=headers
+                    url, params={'ids': openhands_ids}, headers=headers
                 )
                 response.raise_for_status()
                 data = response.json()
@@ -540,12 +542,12 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 results.extend(c for c in infos if c)
             except httpx.HTTPStatusError:
                 _logger.warning(
-                    f'Error getting LLM conversation status from sandbox {sandbox.id}',
+                    f'Error getting OpenHands conversation status from sandbox {sandbox.id}',
                     exc_info=True,
                 )
             except Exception:
                 _logger.exception(
-                    f'Error getting LLM conversation status from sandbox {sandbox.id}',
+                    f'Error getting OpenHands conversation status from sandbox {sandbox.id}',
                     stack_info=True,
                 )
 
@@ -1599,15 +1601,6 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             **dict(acp_settings.acp_env or {}),
         }
 
-        acp_agent = ACPAgent(
-            acp_command=acp_settings.acp_command,
-            acp_args=acp_settings.acp_args,
-            acp_env=merged_env,
-            acp_model=acp_settings.acp_model,
-            acp_session_mode=acp_settings.acp_session_mode,
-            acp_prompt_timeout=acp_settings.acp_prompt_timeout,
-        )
-
         # Pass user secrets via AgentContext so the SDK renders a
         # <CUSTOM_SECRETS> block in the ACP prompt and injects values into
         # the subprocess env at start time (SDK PR #2984).
@@ -1621,8 +1614,21 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             )
             is True
         )
-        if secrets and _sdk_supports_acp_secrets:
-            acp_agent.agent_context = AgentContext(secrets=secrets)
+        agent_context = (
+            AgentContext(secrets=secrets)
+            if secrets and _sdk_supports_acp_secrets
+            else None
+        )
+
+        acp_agent = ACPAgent(
+            acp_command=acp_settings.acp_command,
+            acp_args=acp_settings.acp_args,
+            acp_env=merged_env,
+            acp_model=acp_settings.acp_model,
+            acp_session_mode=acp_settings.acp_session_mode,
+            acp_prompt_timeout=acp_settings.acp_prompt_timeout,
+            agent_context=agent_context,
+        )
 
         sdk_plugins: list[PluginSource] | None = None
         if plugins:
@@ -2140,7 +2146,7 @@ class LiveStatusAppConversationServiceInjector(AppConversationServiceInjector):
             # Get app_mode for SaaS mode
             app_mode = None
             try:
-                from openhands.server.shared import server_config
+                from openhands.app_server.shared import server_config
 
                 app_mode = (
                     server_config.app_mode.value if server_config.app_mode else None

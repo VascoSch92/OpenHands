@@ -37,17 +37,16 @@ from openhands.app_server.user_auth import (
     get_user_settings_store,
 )
 from openhands.app_server.utils.dependencies import get_dependencies
-from openhands.core.logger import openhands_logger as logger
-from openhands.sdk.llm import LLM
-from openhands.sdk.settings import ConversationSettings
-from openhands.server.shared import config
-from openhands.utils.llm import (
+from openhands.app_server.utils.llm import (
     get_provider_api_base,
     is_openhands_model,
     resolve_llm_base_url,
 )
-from openhands.utils.sdk_settings_compat import (
-    LLMAgentSettings,
+from openhands.app_server.utils.logger import openhands_logger as logger
+from openhands.sdk.llm import LLM
+from openhands.sdk.settings import (
+    ConversationSettings,
+    OpenHandsAgentSettings,
     export_agent_settings_schema,
 )
 
@@ -67,10 +66,10 @@ def _post_merge_llm_fixups(settings: Settings) -> None:
     """Apply LLM-specific fixups after merging settings.
 
     Delegates the empty-string → cleared and provider-default inference
-    rules to :func:`openhands.utils.llm.resolve_llm_base_url` so the
+    rules to :func:`openhands.app_server.utils.llm.resolve_llm_base_url` so the
     personal-save and enterprise org-defaults paths stay in lockstep.
     """
-    if not isinstance(settings.agent_settings, LLMAgentSettings):
+    if not isinstance(settings.agent_settings, OpenHandsAgentSettings):
         return
     llm = settings.agent_settings.llm
     llm.base_url = resolve_llm_base_url(
@@ -236,26 +235,6 @@ async def store_settings(
                 )
             if settings.disabled_skills is None:
                 settings.disabled_skills = existing_settings.disabled_skills
-
-        # Update sandbox config with new settings
-        if settings.remote_runtime_resource_factor is not None:
-            config.sandbox.remote_runtime_resource_factor = (
-                settings.remote_runtime_resource_factor
-            )
-
-        # Update git configuration with new settings
-        git_config_updated = False
-        if settings.git_user_name is not None:
-            config.git_user_name = settings.git_user_name
-            git_config_updated = True
-        if settings.git_user_email is not None:
-            config.git_user_email = settings.git_user_email
-            git_config_updated = True
-
-        if git_config_updated:
-            logger.info(
-                f'Updated global git configuration: name={config.git_user_name}, email={config.git_user_email}'
-            )
 
         await settings_store.store(settings)
         return JSONResponse(
