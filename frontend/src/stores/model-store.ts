@@ -10,6 +10,7 @@ export interface ModelListEntry {
    */
   anchorEventId: string | null;
   profiles: LlmProfileSummary[];
+  switchedTo?: string;
 }
 
 interface ModelState {
@@ -21,6 +22,11 @@ interface ModelActions {
     conversationId: string,
     anchorEventId: string | null,
     profiles: LlmProfileSummary[],
+  ) => void;
+  recordSwitch: (
+    conversationId: string,
+    anchorEventId: string | null,
+    profileName: string,
   ) => void;
 }
 
@@ -37,6 +43,21 @@ export const useModelStore = create<ModelStore>()(
             [conversationId]: [
               ...(s.entriesByConversation[conversationId] ?? []),
               { id: crypto.randomUUID(), anchorEventId, profiles },
+            ],
+          },
+        })),
+      recordSwitch: (conversationId, anchorEventId, profileName) =>
+        set((s) => ({
+          entriesByConversation: {
+            ...s.entriesByConversation,
+            [conversationId]: [
+              ...(s.entriesByConversation[conversationId] ?? []),
+              {
+                id: crypto.randomUUID(),
+                anchorEventId,
+                profiles: [],
+                switchedTo: profileName,
+              },
             ],
           },
         })),

@@ -149,11 +149,57 @@ describe("useModelInterceptor", () => {
     act(() => result.current("/model gpt-5"));
 
     expect(mockSwitchProfile).toHaveBeenCalledWith(CONV, "gpt-5");
-    await waitFor(() =>
-      expect(mockDisplaySuccessToast).toHaveBeenCalledWith(
-        "Switched to profile 'gpt-5'",
-      ),
-    );
+    // No success toast — the chat info block (recorded in the store) is the
+    // sole user-visible confirmation; toast would be redundant.
+    await waitFor(() => expect(mockSwitchProfile).toHaveBeenCalled());
+    expect(mockDisplaySuccessToast).not.toHaveBeenCalled();
+  });
+
+  it("records a switch entry in the store after a successful /model <name>", async () => {
+    mockSwitchProfile.mockResolvedValueOnce(undefined);
+    const { result } = renderInterceptor(CONV, vi.fn());
+
+    act(() => result.current("/model gpt-5"));
+
+    await waitFor(() => expect(entries()).toHaveLength(1));
+    expect(entries()[0]).toMatchObject({
+      anchorEventId: null,
+      profiles: [],
+      switchedTo: "gpt-5",
+    });
+  });
+
+  it("anchors the switch entry to the latest rendered event", async () => {
+    const renderedMessage = {
+      id: "evt-91",
+      timestamp: "2026-05-01T10:00:00Z",
+      source: "user",
+      llm_message: { role: "user", content: "hi" },
+    };
+    useEventStore.setState({
+      events: [],
+      uiEvents: [renderedMessage as never],
+    });
+    mockSwitchProfile.mockResolvedValueOnce(undefined);
+    const { result } = renderInterceptor(CONV, vi.fn());
+
+    act(() => result.current("/model gpt-5"));
+
+    await waitFor(() => expect(entries()).toHaveLength(1));
+    expect(entries()[0].anchorEventId).toBe("evt-91");
+    expect(entries()[0].switchedTo).toBe("gpt-5");
+  });
+
+  it("does not record a switch entry when switchProfile rejects", async () => {
+    mockSwitchProfile.mockRejectedValueOnce({
+      response: { data: { detail: "Profile 'ghost' not found" } },
+    });
+    const { result } = renderInterceptor(CONV, vi.fn());
+
+    act(() => result.current("/model ghost"));
+
+    await waitFor(() => expect(mockDisplayErrorToast).toHaveBeenCalled());
+    expect(entries()).toEqual([]);
   });
 
   it("invalidates the active conversation query after a successful switch", async () => {
@@ -167,6 +213,28 @@ describe("useModelInterceptor", () => {
       expect(invalidate).toHaveBeenCalledWith({
         queryKey: ["user", "conversation", CONV],
       }),
+    );
+  });
+
+  it("falls back to the i18n switch-failed key when no error detail is present", async () => {
+    mockSwitchProfile.mockRejectedValueOnce({});
+    const { result } = renderInterceptor(CONV, vi.fn());
+
+    act(() => result.current("/model gpt-5"));
+
+    await waitFor(() =>
+      expect(mockDisplayErrorToast).toHaveBeenCalledWith("MODEL$SWITCH_FAILED"),
+    );
+  });
+
+  it("falls back to the i18n list-failed key when listProfiles rejects without a message", async () => {
+    mockListProfiles.mockRejectedValueOnce({});
+    const { result } = renderInterceptor(CONV, vi.fn());
+
+    act(() => result.current("/model"));
+
+    await waitFor(() =>
+      expect(mockDisplayErrorToast).toHaveBeenCalledWith("MODEL$LIST_FAILED"),
     );
   });
 

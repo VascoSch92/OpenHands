@@ -1,10 +1,11 @@
 import React from "react";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { useModelStore } from "#/stores/model-store";
 import { Typography } from "#/ui/typography";
 import { I18nKey } from "#/i18n/declaration";
 import { GenericEventMessage } from "./generic-event-message";
+import { MonoComponent } from "./mono-component";
 import type { LlmProfileSummary } from "#/api/settings-service/profiles-service.api";
 
 interface ProfileRowProps {
@@ -65,6 +66,24 @@ export function ModelMessages({
   return (
     <div data-testid="model-messages" className="flex flex-col w-full">
       {entries.map((entry) => {
+        if (entry.switchedTo) {
+          return (
+            <GenericEventMessage
+              key={entry.id}
+              title={
+                <span>
+                  <Trans
+                    i18nKey={I18nKey.MODEL$SWITCHED_TO_PROFILE}
+                    values={{ name: entry.switchedTo }}
+                    components={{ cmd: <MonoComponent /> }}
+                  />
+                </span>
+              }
+              details={null}
+            />
+          );
+        }
+
         const isEmpty = entry.profiles.length === 0;
         return (
           <GenericEventMessage

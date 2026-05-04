@@ -1,9 +1,42 @@
+import React from "react";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LlmProfileSummary } from "#/api/settings-service/profiles-service.api";
 import { ModelMessages } from "#/components/features/chat/model-messages";
 import { useModelStore } from "#/stores/model-store";
+
+// Trans needs an i18next instance to render — without one, it emits nothing
+// in the test env. Render a deterministic string so we can assert on it; the
+// mocked `cmd` slot wraps `values.name` in a <strong> so MonoComponent's
+// semantics are exercised even though the real component isn't mounted.
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-i18next")>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string) => key,
+      i18n: { language: "en", exists: () => false },
+    }),
+    Trans: ({
+      i18nKey,
+      values,
+      components,
+    }: {
+      i18nKey: string;
+      values?: Record<string, string>;
+      components?: Record<string, React.ReactElement>;
+    }) => {
+      const cmd = components?.cmd;
+      return (
+        <span>
+          {`${i18nKey}:`}
+          {cmd ? React.cloneElement(cmd, {}, values?.name ?? "") : values?.name}
+        </span>
+      );
+    },
+  };
+});
 
 const CONV = "conv-1";
 
@@ -80,12 +113,42 @@ describe("<ModelMessages />", () => {
   });
 
   it("does not render entries from other conversations", () => {
-    useModelStore
-      .getState()
-      .show("other-conv", null, [profile("default")]);
+    useModelStore.getState().show("other-conv", null, [profile("default")]);
     const { container } = render(
       <ModelMessages conversationId={CONV} anchorEventId={null} />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("renders a switch entry with the profile name in a <strong>", () => {
+    useModelStore.getState().recordSwitch(CONV, null, "gpt-5");
+    render(<ModelMessages conversationId={CONV} anchorEventId={null} />);
+
+    // Switch branch is taken: the SWITCHED_TO_PROFILE key is rendered, and
+    // none of the list-branch keys are.
+    expect(screen.getByText(/MODEL\$SWITCHED_TO_PROFILE/)).toBeInTheDocument();
+    expect(screen.queryByText("MODEL$AVAILABLE_PROFILES")).toBeNull();
+    expect(screen.queryByText("MODEL$NO_SAVED_PROFILES")).toBeNull();
+
+    // The profile name renders inside MonoComponent's <strong> wrapper.
+    const name = screen.getByText("gpt-5");
+    expect(name.tagName).toBe("STRONG");
+    expect(name.className).toContain("font-mono");
+  });
+
+  it("filters switch entries by anchor like list entries", () => {
+    useModelStore.getState().recordSwitch(CONV, "evt-77", "gpt-5");
+    useModelStore.getState().recordSwitch(CONV, null, "claude-sonnet");
+
+    const { unmount } = render(
+      <ModelMessages conversationId={CONV} anchorEventId={null} />,
+    );
+    expect(screen.getByText("claude-sonnet")).toBeInTheDocument();
+    expect(screen.queryByText("gpt-5")).toBeNull();
+    unmount();
+
+    render(<ModelMessages conversationId={CONV} anchorEventId="evt-77" />);
+    expect(screen.getByText("gpt-5")).toBeInTheDocument();
+    expect(screen.queryByText("claude-sonnet")).toBeNull();
   });
 });

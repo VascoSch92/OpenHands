@@ -52,4 +52,25 @@ describe("model store", () => {
     expect(entriesFor(CONV_A)[0].profiles[0].name).toBe("a");
     expect(entriesFor(CONV_B)[0].profiles[0].name).toBe("b");
   });
+
+  it("recordSwitch appends a switch entry tagged with switchedTo", () => {
+    useModelStore.getState().recordSwitch(CONV_A, "evt-7", "gpt-5");
+    expect(entriesFor(CONV_A)).toHaveLength(1);
+    expect(entriesFor(CONV_A)[0]).toMatchObject({
+      anchorEventId: "evt-7",
+      profiles: [],
+      switchedTo: "gpt-5",
+    });
+    expect(entriesFor(CONV_B)).toEqual([]);
+  });
+
+  it("recordSwitch and show stack into the same list in invocation order", () => {
+    useModelStore.getState().show(CONV_A, "evt-1", [profile("default")]);
+    useModelStore.getState().recordSwitch(CONV_A, "evt-2", "gpt-5");
+    expect(entriesFor(CONV_A)).toHaveLength(2);
+    expect(entriesFor(CONV_A)[0].switchedTo).toBeUndefined();
+    expect(entriesFor(CONV_A)[0].profiles).toEqual([profile("default")]);
+    expect(entriesFor(CONV_A)[1].switchedTo).toBe("gpt-5");
+    expect(entriesFor(CONV_A)[1].profiles).toEqual([]);
+  });
 });
